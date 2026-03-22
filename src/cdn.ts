@@ -30,6 +30,26 @@ export function aesEcbPaddedSize(plaintextSize: number): number {
 
 // ─── 文件类型检测 ─────────────────────────────────────
 
+/** 通过文件头 magic bytes 检测扩展名 */
+function detectExtByMagic(buf: Buffer): string {
+  if (buf.length < 4) return '';
+  // JPEG: FF D8 FF
+  if (buf[0] === 0xFF && buf[1] === 0xD8 && buf[2] === 0xFF) return '.jpg';
+  // PNG: 89 50 4E 47
+  if (buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4E && buf[3] === 0x47) return '.png';
+  // GIF: 47 49 46 38
+  if (buf[0] === 0x47 && buf[1] === 0x49 && buf[2] === 0x46 && buf[3] === 0x38) return '.gif';
+  // BMP: 42 4D
+  if (buf[0] === 0x42 && buf[1] === 0x4D) return '.bmp';
+  // WEBP: 52 49 46 46 ... 57 45 42 50
+  if (buf.length >= 12 && buf[0] === 0x52 && buf[1] === 0x49 && buf[8] === 0x57 && buf[9] === 0x45) return '.webp';
+  // MP4: ... 66 74 79 70 (ftyp at offset 4)
+  if (buf.length >= 8 && buf[4] === 0x66 && buf[5] === 0x74 && buf[6] === 0x79 && buf[7] === 0x70) return '.mp4';
+  // PDF: 25 50 44 46
+  if (buf[0] === 0x25 && buf[1] === 0x50 && buf[2] === 0x44 && buf[3] === 0x46) return '.pdf';
+  return '';
+}
+
 /** 根据扩展名检测媒体类型：IMAGE=1, VIDEO=2, FILE=3 */
 function detectMediaType(filePath: string): number {
   const ext = path.extname(filePath).toLowerCase();
@@ -224,11 +244,16 @@ export async function downloadMedia(params: {
   // 4. 解密
   const plaintext = decryptAesEcb(ciphertext, aesKey);
 
-  // 5. 写入文件
+  // 5. 通过文件头检测类型并加后缀
+  const ext = detectExtByMagic(plaintext);
   const targetDir = outDir ?? path.join(os.tmpdir(), 'cc-wechat', 'media');
   fs.mkdirSync(targetDir, { recursive: true });
 
-  const targetName = fileName ?? `media-${Date.now()}`;
+  let targetName = fileName ?? `media-${Date.now()}`;
+  // 如果文件名没有后缀，根据 magic bytes 补上
+  if (!path.extname(targetName) && ext) {
+    targetName += ext;
+  }
   const targetPath = path.join(targetDir, targetName);
   fs.writeFileSync(targetPath, plaintext);
 
