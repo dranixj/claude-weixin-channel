@@ -88,13 +88,54 @@ function findClaudeExe(): string | null {
   return null;
 }
 
+/** 从 wrapper/cmd 解析到真正包含代码的文件（exe 或 cli.js） */
+function resolvePatchTarget(claudePath: string): string {
+  const ext = path.extname(claudePath).toLowerCase();
+  const dir = path.dirname(claudePath);
+
+  // exe 或大文件（>1MB）→ 直接 patch
+  if (ext === '.exe') return claudePath;
+  const stat = fs.statSync(claudePath);
+  if (stat.size > 1_000_000) return claudePath;
+
+  // .cmd / 小文件 → npm wrapper，查找 cli.js
+  const cliJs = path.join(dir, 'node_modules', '@anthropic-ai', 'claude-code', 'cli.js');
+  if (fs.existsSync(cliJs)) return cliJs;
+
+  // 读 .cmd 内容提取路径
+  if (ext === '.cmd') {
+    try {
+      const content = fs.readFileSync(claudePath, 'utf-8');
+      const match = content.match(/node_modules[\\/]@anthropic-ai[\\/]claude-code[\\/]cli\.js/);
+      if (match) {
+        const resolved = path.join(dir, 'node_modules', '@anthropic-ai', 'claude-code', 'cli.js');
+        if (fs.existsSync(resolved)) return resolved;
+      }
+    } catch { /* ignore */ }
+  }
+
+  // symlink → resolve
+  try {
+    const realPath = fs.realpathSync(claudePath);
+    if (realPath !== claudePath) return resolvePatchTarget(realPath);
+  } catch { /* ignore */ }
+
+  return claudePath;
+}
+
 function patch(): void {
   console.log('\n  cc-wechat patch — Claude Code Channels 补丁\n');
 
-  const exePath = findClaudeExe();
-  if (!exePath) {
+  const claudePath = findClaudeExe();
+  if (!claudePath) {
     console.error('  找不到 Claude Code。请确认已安装。');
     process.exit(1);
+  }
+
+  const exePath = resolvePatchTarget(claudePath);
+  if (exePath !== claudePath) {
+    console.log(`  查找: ${claudePath}`);
+    console.log(`  解析: ${exePath}`);
   }
   console.log(`  目标: ${exePath}`);
 
@@ -186,11 +227,13 @@ function patch(): void {
 function unpatch(): void {
   console.log('\n  cc-wechat unpatch — 恢复原始 Claude Code\n');
 
-  const exePath = findClaudeExe();
-  if (!exePath) {
+  const claudePath = findClaudeExe();
+  if (!claudePath) {
     console.error('  找不到 Claude Code。');
     process.exit(1);
   }
+
+  const exePath = resolvePatchTarget(claudePath);
 
   const backupPath = exePath + '.bak';
   if (!fs.existsSync(backupPath)) {
