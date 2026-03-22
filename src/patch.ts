@@ -1,49 +1,32 @@
 #!/usr/bin/env node
 /**
- * cc-wechat 补丁工具
- * 绕过 Claude Code 的 Channels 云控检查（tengu_harbor feature flag + accessToken auth）
- * 用法：node dist/patch.js 或 npx cc-wechat patch
+ * cc-wechat 补丁工具（双模式）
+ * - 二进制模式（exe）：按固定字符串搜索替换
+ * - AST 模式（cli.js / npm 安装）：acorn 解析 JS AST，按语义特征定位
  */
 
 import fs from 'node:fs';
 import path from 'node:path';
 import { homedir } from 'node:os';
 import { execSync } from 'node:child_process';
+import { createRequire } from 'node:module';
 
-// 补丁定义：[特征字符串, 替换字符串, 说明]
-const PATCHES: Array<[string, string, string]> = [
-  // 1. Channels feature flag 云控
-  [
-    'function PaH(){return lA("tengu_harbor",!1)}',
-    'function PaH(){return                   !0 }',
-    'Channels feature flag (tengu_harbor)',
-  ],
-  // 2. S1_ gate auth 检查
-  [
-    'if(!yf()?.accessToken)',
-    'if(        false     )',
-    'Channel gate accessToken check',
-  ],
-  // 3. UI 层 noAuth 检查
-  [
-    'noAuth:!yf()?.accessToken',
-    'noAuth:         false    ',
-    'UI noAuth display check',
-  ],
+// ─── 二进制模式补丁定义 ──────────────────────────────────
+const BINARY_PATCHES: Array<[string, string, string]> = [
+  ['function PaH(){return lA("tengu_harbor",!1)}', 'function PaH(){return                   !0 }', 'Channels feature flag (tengu_harbor)'],
+  ['if(!yf()?.accessToken)', 'if(        false     )', 'Channel gate auth check'],
+  ['noAuth:!yf()?.accessToken', 'noAuth:         false    ', 'UI noAuth display check'],
 ];
 
-/** 查找 claude 可执行文件路径 */
+// ─── 查找 claude ──────────────────────────────────────────
 function findClaudeExe(): string | null {
   const home = homedir();
-
-  // 1. which/where（最可靠）
   try {
     const cmd = process.platform === 'win32' ? 'where claude 2>nul' : 'which claude 2>/dev/null';
     const p = execSync(cmd, { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }).trim().split('\n')[0].trim();
     if (p && fs.existsSync(p)) return p;
   } catch { /* ignore */ }
 
-  // 2. 常见安装路径
   const candidates = [
     path.join(home, '.local', 'bin', 'claude.exe'),
     path.join(home, '.local', 'bin', 'claude'),
@@ -56,16 +39,10 @@ function findClaudeExe(): string | null {
     path.join(home, 'AppData', 'Local', 'Programs', 'claude-code', 'claude.exe'),
     path.join(home, 'AppData', 'Local', 'claude-code', 'claude.exe'),
     path.join(home, 'AppData', 'Local', 'AnthropicClaude', 'claude.exe'),
-    '/usr/local/bin/claude',
-    '/opt/homebrew/bin/claude',
-    '/usr/bin/claude',
-    '/snap/bin/claude',
+    '/usr/local/bin/claude', '/opt/homebrew/bin/claude', '/usr/bin/claude', '/snap/bin/claude',
   ];
-  for (const p of candidates) {
-    if (fs.existsSync(p)) return p;
-  }
+  for (const p of candidates) { if (fs.existsSync(p)) return p; }
 
-  // 3. npm global prefix 动态查找
   try {
     const prefix = execSync('npm config get prefix', { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
     if (prefix) {
@@ -75,7 +52,6 @@ function findClaudeExe(): string | null {
     }
   } catch { /* ignore */ }
 
-  // 4. PATH 逐目录搜索（兜底）
   const pathDirs = (process.env.PATH || '').split(process.platform === 'win32' ? ';' : ':');
   const exeNames = process.platform === 'win32' ? ['claude.exe', 'claude.cmd'] : ['claude'];
   for (const dir of pathDirs) {
@@ -84,184 +60,290 @@ function findClaudeExe(): string | null {
       if (fs.existsSync(p)) return p;
     }
   }
-
   return null;
 }
 
-/** 从 wrapper/cmd 解析到真正包含代码的文件（exe 或 cli.js） */
+// ─── 解析到真正的可 patch 文件 ────────────────────────────
 function resolvePatchTarget(claudePath: string): string {
   const ext = path.extname(claudePath).toLowerCase();
   const dir = path.dirname(claudePath);
-
-  // exe 或大文件（>1MB）→ 直接 patch
   if (ext === '.exe') return claudePath;
   const stat = fs.statSync(claudePath);
   if (stat.size > 1_000_000) return claudePath;
 
-  // .cmd / 小文件 → npm wrapper，查找 cli.js
   const cliJs = path.join(dir, 'node_modules', '@anthropic-ai', 'claude-code', 'cli.js');
   if (fs.existsSync(cliJs)) return cliJs;
 
-  // 读 .cmd 内容提取路径
   if (ext === '.cmd') {
     try {
       const content = fs.readFileSync(claudePath, 'utf-8');
-      const match = content.match(/node_modules[\\/]@anthropic-ai[\\/]claude-code[\\/]cli\.js/);
-      if (match) {
+      if (content.match(/node_modules[\\/]@anthropic-ai[\\/]claude-code[\\/]cli\.js/)) {
         const resolved = path.join(dir, 'node_modules', '@anthropic-ai', 'claude-code', 'cli.js');
         if (fs.existsSync(resolved)) return resolved;
       }
     } catch { /* ignore */ }
   }
 
-  // symlink → resolve
   try {
     const realPath = fs.realpathSync(claudePath);
     if (realPath !== claudePath) return resolvePatchTarget(realPath);
   } catch { /* ignore */ }
-
   return claudePath;
 }
 
-function patch(): void {
-  console.log('\n  cc-wechat patch — Claude Code Channels 补丁\n');
+// ─── 判断是否二进制文件 ──────────────────────────────────
+function isBinaryFile(filePath: string): boolean {
+  const ext = path.extname(filePath).toLowerCase();
+  if (ext === '.exe') return true;
+  const header = Buffer.alloc(4);
+  const fd = fs.openSync(filePath, 'r');
+  fs.readSync(fd, header, 0, 4, 0);
+  fs.closeSync(fd);
+  if (header[0] === 0x4D && header[1] === 0x5A) return true;
+  if (header[0] === 0x7F && header[1] === 0x45) return true;
+  if (header[0] === 0xFE && header[1] === 0xED) return true;
+  if (header[0] === 0xCF && header[1] === 0xFA) return true;
+  return false;
+}
 
-  const claudePath = findClaudeExe();
-  if (!claudePath) {
-    console.error('  找不到 Claude Code。请确认已安装。');
-    process.exit(1);
-  }
-
-  const exePath = resolvePatchTarget(claudePath);
-  if (exePath !== claudePath) {
-    console.log(`  查找: ${claudePath}`);
-    console.log(`  解析: ${exePath}`);
-  }
-  console.log(`  目标: ${exePath}`);
-
-  // 读取二进制
-  const buf = fs.readFileSync(exePath);
-  let totalPatched = 0;
-  let alreadyPatched = 0;
-
-  for (const [original, replacement, desc] of PATCHES) {
-    if (original.length !== replacement.length) {
-      console.error(`  错误: "${desc}" 长度不匹配 (${original.length} vs ${replacement.length})`);
-      process.exit(1);
-    }
-
-    const origBuf = Buffer.from(original);
-    const patchBuf = Buffer.from(replacement);
-
-    // 搜索所有出现位置
-    let pos = 0;
-    let count = 0;
-    let alreadyCount = 0;
-
-    while (true) {
-      const idx = buf.indexOf(origBuf, pos);
-      if (idx === -1) break;
-      patchBuf.copy(buf, idx);
-      count++;
-      pos = idx + 1;
-    }
-
-    // 检查是否已经 patch 过
-    pos = 0;
-    while (true) {
-      const idx = buf.indexOf(patchBuf, pos);
-      if (idx === -1) break;
-      alreadyCount++;
-      pos = idx + 1;
-    }
-
-    if (count > 0) {
-      console.log(`  [PATCH] ${desc}: ${count} 处已修补`);
-      totalPatched += count;
-    } else if (alreadyCount > 0) {
-      console.log(`  [SKIP]  ${desc}: 已修补过 (${alreadyCount} 处)`);
-      alreadyPatched += alreadyCount;
-    } else {
-      console.log(`  [WARN]  ${desc}: 未找到特征字符串（CC 版本可能已更新）`);
-    }
-  }
-
-  if (totalPatched === 0 && alreadyPatched > 0) {
-    console.log('\n  所有补丁已生效，无需操作。\n');
-    return;
-  }
-
-  if (totalPatched === 0) {
-    console.error('\n  未找到任何可修补的位置。Claude Code 版本可能不兼容。\n');
-    process.exit(1);
-  }
-
-  // 备份
+// ─── 写入结果 ──────────────────────────────────────────────
+function writeResult(exePath: string, buf: Buffer): void {
   const backupPath = exePath + '.bak';
   if (!fs.existsSync(backupPath)) {
     fs.copyFileSync(exePath, backupPath);
-    console.log(`  [BACKUP] 已备份到 ${backupPath}`);
+    console.log(`\n  📦 已备份: ${backupPath}`);
+  }
+  try {
+    fs.writeFileSync(exePath, buf);
+    console.log('\n  ✅ 补丁已直接写入，立即生效！\n');
+  } catch {
+    const tmpPath = exePath + '.patched';
+    fs.writeFileSync(tmpPath, buf);
+    console.log(`\n  ⚠️  Claude Code 正在运行，无法直接写入。`);
+    console.log(`  补丁已保存到: ${tmpPath}\n`);
+    console.log('  请退出所有 Claude Code 后执行:\n');
+    if (process.platform === 'win32') {
+      const dir = path.dirname(exePath);
+      const name = path.basename(exePath);
+      console.log(`    cd "${dir}"`);
+      console.log(`    Move-Item ${name} ${name}.old -Force`);
+      console.log(`    Move-Item ${name}.patched ${name} -Force`);
+    } else {
+      console.log(`    mv "${exePath}" "${exePath}.old"`);
+      console.log(`    mv "${tmpPath}" "${exePath}"`);
+    }
+    console.log();
+  }
+  console.log('  恢复方法: npx cc-wechat unpatch\n');
+}
+
+// ─── 二进制模式 patch ──────────────────────────────────────
+function patchBinary(exePath: string): void {
+  console.log('  模式: 二进制字符串搜索\n');
+  const buf = fs.readFileSync(exePath);
+  let patched = 0, skipped = 0;
+
+  for (const [original, replacement, desc] of BINARY_PATCHES) {
+    const origBuf = Buffer.from(original);
+    const patchBuf = Buffer.from(replacement);
+    let pos = 0, count = 0;
+    while (true) { const idx = buf.indexOf(origBuf, pos); if (idx === -1) break; patchBuf.copy(buf, idx); count++; pos = idx + 1; }
+    let alreadyCount = 0; pos = 0;
+    while (true) { const idx = buf.indexOf(patchBuf, pos); if (idx === -1) break; alreadyCount++; pos = idx + 1; }
+
+    if (count > 0) { console.log(`  ✅ ${desc} — ${count} 处已修补`); patched += count; }
+    else if (alreadyCount > 0) { console.log(`  ⏭️  ${desc} — 已修补`); skipped += alreadyCount; }
+    else { console.log(`  ⚠️  ${desc} — 未找到`); }
   }
 
-  // 写入 — 先写临时文件再替换
-  const tmpPath = exePath + '.patched';
-  fs.writeFileSync(tmpPath, buf);
+  if (patched === 0 && skipped > 0) { console.log('\n  所有补丁已生效。\n'); return; }
+  if (patched === 0) { console.error('\n  未找到可修补位置。\n'); process.exit(1); }
+  writeResult(exePath, buf);
+}
 
-  console.log(`\n  补丁已写入 ${tmpPath}`);
-  console.log('  请关闭所有 Claude Code 进程后手动替换：\n');
+// ─── AST 模式 patch ──────────────────────────────────────
+async function patchAst(exePath: string): Promise<void> {
+  console.log('  模式: AST 语义分析\n');
 
-  if (process.platform === 'win32') {
-    const dir = path.dirname(exePath);
-    const name = path.basename(exePath);
-    console.log(`  cd ${dir}`);
-    console.log(`  Move-Item ${name} ${name}.old -Force`);
-    console.log(`  Move-Item ${name}.patched ${name} -Force\n`);
-  } else {
-    console.log(`  mv "${exePath}" "${exePath}.old"`);
-    console.log(`  mv "${tmpPath}" "${exePath}"\n`);
+  // 动态下载 acorn
+  const acornPath = path.join(homedir(), '.cache', 'cc-channel-patch', 'acorn.js');
+  if (!fs.existsSync(acornPath)) {
+    console.log('  下载 acorn 解析器...');
+    fs.mkdirSync(path.dirname(acornPath), { recursive: true });
+    const resp = await fetch('https://unpkg.com/acorn@8.14.0/dist/acorn.js');
+    if (!resp.ok) throw new Error(`下载 acorn 失败: HTTP ${resp.status}`);
+    fs.writeFileSync(acornPath, await resp.text());
   }
 
-  console.log(`  恢复方法: 用 ${backupPath} 替换即可\n`);
+  const require = createRequire(import.meta.url);
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+  const acorn = require(acornPath) as { parse: (code: string, opts: Record<string, unknown>) => ASTNode };
+
+  let code = fs.readFileSync(exePath, 'utf-8');
+  let shebang = '';
+  if (code.startsWith('#!')) { const idx = code.indexOf('\n'); shebang = code.slice(0, idx + 1); code = code.slice(idx + 1); }
+
+  let ast: ASTNode;
+  try { ast = acorn.parse(code, { ecmaVersion: 2022, sourceType: 'module' }); }
+  catch (e) { console.error(`  AST 解析失败: ${(e as Error).message}`); process.exit(1); }
+
+  const src = (node: ASTNode) => code.slice(node.start, node.end);
+
+  function findNodes(node: unknown, predicate: (n: ASTNode) => boolean, results: ASTNode[] = []): ASTNode[] {
+    if (!node || typeof node !== 'object') return results;
+    const n = node as ASTNode;
+    if (predicate(n)) results.push(n);
+    for (const key in n) {
+      const val = (n as Record<string, unknown>)[key];
+      if (val && typeof val === 'object') {
+        if (Array.isArray(val)) val.forEach(child => findNodes(child, predicate, results));
+        else findNodes(val, predicate, results);
+      }
+    }
+    return results;
+  }
+
+  const replacements: Array<{ start: number; end: number; replacement: string }> = [];
+  let patchCount = 0;
+
+  // Patch 1: tengu_harbor
+  const harborCalls = findNodes(ast, n =>
+    n.type === 'CallExpression' && n.arguments?.length === 2 &&
+    n.arguments[0]?.type === 'Literal' && n.arguments[0]?.value === 'tengu_harbor'
+  );
+  let harborPatched = false;
+  for (const call of harborCalls) {
+    const arg = call.arguments![1]!;
+    if (arg.type === 'UnaryExpression' && arg.operator === '!' && arg.argument?.type === 'Literal' && arg.argument?.value === 1) {
+      replacements.push({ start: arg.start, end: arg.end, replacement: '!0' });
+      patchCount++;
+      console.log(`  ✅ tengu_harbor flag → !0`);
+      break;
+    }
+    if (arg.type === 'UnaryExpression' && arg.operator === '!' && arg.argument?.type === 'Literal' && arg.argument?.value === 0) {
+      harborPatched = true;
+      console.log('  ⏭️  tengu_harbor flag — 已修补');
+      break;
+    }
+  }
+
+  // Patch 2: channel decision function
+  const markerLiterals = findNodes(ast, n => n.type === 'Literal' && n.value === 'channels feature is not currently available');
+  let qMqPatched = false;
+  if (markerLiterals.length > 0) {
+    const markerPos = markerLiterals[0].start;
+    const enclosing = findNodes(ast, n =>
+      (n.type === 'FunctionDeclaration' || n.type === 'FunctionExpression') && n.start < markerPos && n.end > markerPos
+    ).sort((a, b) => (a.end - a.start) - (b.end - b.start));
+
+    if (enclosing.length > 0) {
+      const fn = enclosing[0];
+      const body = fn.body?.body;
+      if (body?.length && body[0].type === 'IfStatement' && src(body[0]).includes('claude/channel')) {
+        const newBody = '{' + src(body[0]) + 'return{action:"register"}}';
+        replacements.push({ start: fn.body!.start, end: fn.body!.end, replacement: newBody });
+        patchCount++;
+        console.log(`  ✅ Channel decision — 绕过 check 2-7`);
+      }
+    }
+  } else if (code.includes('claude/channel capability') && !code.includes('channels feature is not currently available')) {
+    qMqPatched = true;
+    console.log('  ⏭️  Channel decision — 已修补');
+  }
+
+  // Patch 3: UI notice
+  const policyProps = findNodes(ast, n =>
+    n.type === 'Property' && n.key?.type === 'Identifier' && n.key?.name === 'policyBlocked' &&
+    n.value != null && src(n.value as ASTNode).includes('channelsEnabled')
+  );
+  let noticePatched = false;
+  if (policyProps.length > 0) {
+    const propPos = policyProps[0].start;
+    const noticeFuncs = findNodes(ast, n =>
+      (n.type === 'FunctionDeclaration' || n.type === 'FunctionExpression') && n.start < propPos && n.end > propPos
+    ).sort((a, b) => (a.end - a.start) - (b.end - b.start));
+
+    if (noticeFuncs.length > 0) {
+      const nf = noticeFuncs[0];
+      const firstCalls = findNodes(nf.body!.body![0], n => n.type === 'CallExpression' && n.callee?.type === 'Identifier');
+      const getAllowed = firstCalls.length > 0 ? src(firstCalls[0]) : '$N()';
+      const mapCalls = findNodes(nf, n => n.type === 'CallExpression' && n.callee?.type === 'MemberExpression' && n.callee?.property?.name === 'map');
+      const formatter = mapCalls.length > 0 && mapCalls[0].arguments?.[0] ? src(mapCalls[0].arguments[0]) : 'naH';
+
+      const newBody = '{let A=' + getAllowed + ';let q=A.length>0?A.map(' + formatter + ').join(", "):"";return{channels:A,disabled:!1,noAuth:!1,policyBlocked:!1,list:q}}';
+      replacements.push({ start: nf.body!.start, end: nf.body!.end, replacement: newBody });
+      patchCount++;
+      console.log(`  ✅ UI notice — disabled/noAuth/policyBlocked 全部置 false`);
+    }
+  } else if (code.includes('policyBlocked') && !code.includes('channelsEnabled!==!0')) {
+    noticePatched = true;
+    console.log('  ⏭️  UI notice — 已修补');
+  }
+
+  if (patchCount === 0) {
+    if (harborPatched || qMqPatched || noticePatched) { console.log('\n  所有补丁已生效。\n'); return; }
+    console.error('\n  未找到可修补位置。CC 版本可能不兼容。\n'); process.exit(1);
+  }
+
+  replacements.sort((a, b) => b.start - a.start);
+  let newCode = code;
+  for (const r of replacements) { newCode = newCode.slice(0, r.start) + r.replacement + newCode.slice(r.end); }
+
+  writeResult(exePath, Buffer.from(shebang + newCode, 'utf-8'));
+}
+
+// ─── AST 节点类型（简化） ─────────────────────────────────
+interface ASTNode {
+  type: string;
+  start: number;
+  end: number;
+  value?: unknown;
+  name?: string;
+  operator?: string;
+  arguments?: ASTNode[];
+  argument?: ASTNode;
+  callee?: ASTNode;
+  property?: ASTNode;
+  key?: ASTNode;
+  body?: ASTNode & { body?: ASTNode[] };
+  id?: ASTNode;
+  [key: string]: unknown;
+}
+
+// ─── patch 入口 ────────────────────────────────────────────
+async function patch(): Promise<void> {
+  console.log('\n  cc-wechat patch — Claude Code Channels 补丁\n');
+
+  const claudePath = findClaudeExe();
+  if (!claudePath) { console.error('  找不到 Claude Code。\n'); process.exit(1); }
+
+  const exePath = resolvePatchTarget(claudePath);
+  console.log(`  查找: ${claudePath}`);
+  if (exePath !== claudePath) console.log(`  解析: ${exePath}`);
+  console.log(`  目标: ${exePath}\n`);
+
+  if (isBinaryFile(exePath)) { patchBinary(exePath); }
+  else { await patchAst(exePath); }
 }
 
 function unpatch(): void {
   console.log('\n  cc-wechat unpatch — 恢复原始 Claude Code\n');
-
   const claudePath = findClaudeExe();
-  if (!claudePath) {
-    console.error('  找不到 Claude Code。');
-    process.exit(1);
-  }
-
+  if (!claudePath) { console.error('  找不到 Claude Code。\n'); process.exit(1); }
   const exePath = resolvePatchTarget(claudePath);
-
   const backupPath = exePath + '.bak';
-  if (!fs.existsSync(backupPath)) {
-    console.error(`  未找到备份文件 ${backupPath}`);
-    process.exit(1);
-  }
-
-  const tmpPath = exePath + '.restore';
-  fs.copyFileSync(backupPath, tmpPath);
-  console.log(`  已准备恢复文件 ${tmpPath}`);
-  console.log('  请关闭所有 Claude Code 进程后手动替换：\n');
-
-  if (process.platform === 'win32') {
-    const dir = path.dirname(exePath);
-    const name = path.basename(exePath);
-    console.log(`  cd ${dir}`);
-    console.log(`  Move-Item ${name} ${name}.patched -Force`);
-    console.log(`  Move-Item ${name}.restore ${name} -Force\n`);
-  } else {
-    console.log(`  mv "${exePath}" "${exePath}.patched"`);
-    console.log(`  mv "${tmpPath}" "${exePath}"\n`);
+  if (!fs.existsSync(backupPath)) { console.error(`  未找到备份 ${backupPath}\n`); process.exit(1); }
+  try {
+    fs.copyFileSync(backupPath, exePath);
+    console.log('  ✅ 已恢复。\n');
+  } catch {
+    const tmpPath = exePath + '.restore';
+    fs.copyFileSync(backupPath, tmpPath);
+    console.log(`  ⚠️  CC 正在运行，恢复文件: ${tmpPath}\n`);
   }
 }
 
 // 入口
 const cmd = process.argv[2];
-if (cmd === 'unpatch' || cmd === 'restore') {
-  unpatch();
-} else {
-  patch();
-}
+if (cmd === 'unpatch' || cmd === 'restore') { unpatch(); }
+else { patch().catch(e => { console.error(`  错误: ${(e as Error).message}\n`); process.exit(1); }); }
