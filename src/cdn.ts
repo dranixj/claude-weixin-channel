@@ -110,7 +110,7 @@ export async function uploadMedia(params: {
         ...authHeaders,
         'Content-Type': 'application/octet-stream',
       },
-      body: new Uint8Array(ciphertext),
+      body: new Uint8Array(ciphertext) as unknown as BodyInit,
       signal: controller.signal,
     });
     if (!cdnResp.ok) {

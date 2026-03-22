@@ -28,7 +28,7 @@ const QR_WEB_PORT_END = 18899;
  * 输出到 stderr 避免干扰 MCP stdio
  */
 export async function loginTerminal(baseUrl?: string): Promise<LoginResult> {
-  const qrTerminal = await import('qrcode-terminal');
+  const qrTerminal = await import('qrcode-terminal') as unknown as { generate: (text: string, opts: { small: boolean }, cb: (qr: string) => void) => void };
 
   for (let qrRefreshCount = 0; qrRefreshCount < MAX_QR_REFRESH; qrRefreshCount++) {
     const qrResp = await getQRCode(baseUrl);
