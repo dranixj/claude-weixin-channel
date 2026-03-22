@@ -1,0 +1,24 @@
+{
+  "name": "cc-wechat",
+  "version": "0.1.0",
+  "description": "WeChat channel for Claude Code via iLink Bot API",
+  "type": "module",
+  "bin": {
+    "cc-wechat": "dist/cli.js",
+    "cc-wechat-server": "dist/server.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch"
+  },
+  "engines": { "node": ">=22" },
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.1",
+    "qrcode-terminal": "^0.12.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.7.0"
+  }
+}
