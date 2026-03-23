@@ -15,11 +15,30 @@ import path from 'node:path';
 import { homedir } from 'node:os';
 import { execSync } from 'node:child_process';
 
-// ─── 二进制模式补丁定义（exe 专用）────────────────────────
-const BINARY_PATCHES = [
-  ['function PaH(){return lA("tengu_harbor",!1)}', 'function PaH(){return                   !0 }', 'Channels feature flag (tengu_harbor)'],
-  ['if(!yf()?.accessToken)', 'if(        false     )', 'Channel gate auth check'],
-  ['noAuth:!yf()?.accessToken', 'noAuth:         false    ', 'UI noAuth display check'],
+// ─── 二进制模式补丁定义 ────────────────────────────────────
+// 每组：多个 [原始, 替换] 变体，匹配到任一即生效（适配不同平台 minify 结果）
+const BINARY_PATCH_GROUPS = [
+  {
+    desc: 'Channels feature flag (tengu_harbor)',
+    variants: [
+      ['function PaH(){return lA("tengu_harbor",!1)}', 'function PaH(){return                   !0 }'],
+      ['function waH(){return l$("tengu_harbor",!1)}', 'function waH(){return                   !0 }'],
+    ],
+  },
+  {
+    desc: 'Channel gate auth check',
+    variants: [
+      ['if(!yf()?.accessToken)', 'if(        false     )'],
+      ['if(!SL()?.accessToken)', 'if(        false     )'],
+    ],
+  },
+  {
+    desc: 'UI noAuth display check',
+    variants: [
+      ['noAuth:!yf()?.accessToken', 'noAuth:         false    '],
+      ['noAuth:!SL()?.accessToken', 'noAuth:         false    '],
+    ],
+  },
 ];
 
 // ─── 查找 claude 可执行文件 ──────────────────────────────
@@ -132,35 +151,51 @@ function patchBinary(exePath) {
   const buf = fs.readFileSync(exePath);
   let patched = 0, skipped = 0;
 
-  for (const [original, replacement, desc] of BINARY_PATCHES) {
-    if (original.length !== replacement.length) {
-      console.error(`  致命错误: "${desc}" 补丁长度不匹配`);
-      process.exit(1);
-    }
-    const origBuf = Buffer.from(original);
-    const patchBuf = Buffer.from(replacement);
+  for (const { desc, variants } of BINARY_PATCH_GROUPS) {
+    let groupPatched = false, groupSkipped = false;
 
-    let pos = 0, count = 0;
-    while (true) {
-      const idx = buf.indexOf(origBuf, pos);
-      if (idx === -1) break;
-      patchBuf.copy(buf, idx);
-      count++;
-      pos = idx + 1;
+    for (const [original, replacement] of variants) {
+      if (original.length !== replacement.length) {
+        console.error(`  致命错误: "${desc}" 补丁长度不匹配 (${original.length} vs ${replacement.length})`);
+        process.exit(1);
+      }
+      const origBuf = Buffer.from(original);
+      const patchBuf = Buffer.from(replacement);
+
+      // 搜索并替换
+      let pos = 0, count = 0;
+      while (true) {
+        const idx = buf.indexOf(origBuf, pos);
+        if (idx === -1) break;
+        patchBuf.copy(buf, idx);
+        count++;
+        pos = idx + 1;
+      }
+
+      if (count > 0) {
+        console.log(`  ✅ ${desc} — ${count} 处已修补`);
+        patched += count;
+        groupPatched = true;
+        break; // 一组只需匹配一个变体
+      }
+
+      // 检查是否已 patch
+      let alreadyCount = 0;
+      pos = 0;
+      while (true) {
+        const idx = buf.indexOf(patchBuf, pos);
+        if (idx === -1) break;
+        alreadyCount++;
+        pos = idx + 1;
+      }
+      if (alreadyCount > 0) {
+        groupSkipped = true;
+        break;
+      }
     }
 
-    let alreadyCount = 0;
-    pos = 0;
-    while (true) {
-      const idx = buf.indexOf(patchBuf, pos);
-      if (idx === -1) break;
-      alreadyCount++;
-      pos = idx + 1;
-    }
-
-    if (count > 0) { console.log(`  ✅ ${desc} — ${count} 处已修补`); patched += count; }
-    else if (alreadyCount > 0) { console.log(`  ⏭️  ${desc} — 已修补 (${alreadyCount} 处)`); skipped += alreadyCount; }
-    else { console.log(`  ⚠️  ${desc} — 未找到`); }
+    if (!groupPatched && groupSkipped) { console.log(`  ⏭️  ${desc} — 已修补`); skipped++; }
+    else if (!groupPatched && !groupSkipped) { console.log(`  ⚠️  ${desc} — 未找到`); }
   }
 
   if (patched === 0 && skipped > 0) { console.log('\n  所有补丁已生效，无需操作。\n'); return; }

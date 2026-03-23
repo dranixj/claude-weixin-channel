@@ -12,10 +12,29 @@ import { execSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 
 // ─── 二进制模式补丁定义 ──────────────────────────────────
-const BINARY_PATCHES: Array<[string, string, string]> = [
-  ['function PaH(){return lA("tengu_harbor",!1)}', 'function PaH(){return                   !0 }', 'Channels feature flag (tengu_harbor)'],
-  ['if(!yf()?.accessToken)', 'if(        false     )', 'Channel gate auth check'],
-  ['noAuth:!yf()?.accessToken', 'noAuth:         false    ', 'UI noAuth display check'],
+// 每组多个变体，适配不同平台的 minify 结果（Windows/Linux/macOS 函数名不同）
+const BINARY_PATCH_GROUPS: Array<{ desc: string; variants: Array<[string, string]> }> = [
+  {
+    desc: 'Channels feature flag (tengu_harbor)',
+    variants: [
+      ['function PaH(){return lA("tengu_harbor",!1)}', 'function PaH(){return                   !0 }'],
+      ['function waH(){return l$("tengu_harbor",!1)}', 'function waH(){return                   !0 }'],
+    ],
+  },
+  {
+    desc: 'Channel gate auth check',
+    variants: [
+      ['if(!yf()?.accessToken)', 'if(        false     )'],
+      ['if(!SL()?.accessToken)', 'if(        false     )'],
+    ],
+  },
+  {
+    desc: 'UI noAuth display check',
+    variants: [
+      ['noAuth:!yf()?.accessToken', 'noAuth:         false    '],
+      ['noAuth:!SL()?.accessToken', 'noAuth:         false    '],
+    ],
+  },
 ];
 
 // ─── 查找 claude ──────────────────────────────────────────
@@ -143,17 +162,30 @@ function patchBinary(exePath: string): void {
   const buf = fs.readFileSync(exePath);
   let patched = 0, skipped = 0;
 
-  for (const [original, replacement, desc] of BINARY_PATCHES) {
-    const origBuf = Buffer.from(original);
-    const patchBuf = Buffer.from(replacement);
-    let pos = 0, count = 0;
-    while (true) { const idx = buf.indexOf(origBuf, pos); if (idx === -1) break; patchBuf.copy(buf, idx); count++; pos = idx + 1; }
-    let alreadyCount = 0; pos = 0;
-    while (true) { const idx = buf.indexOf(patchBuf, pos); if (idx === -1) break; alreadyCount++; pos = idx + 1; }
+  for (const { desc, variants } of BINARY_PATCH_GROUPS) {
+    let groupPatched = false, groupSkipped = false;
 
-    if (count > 0) { console.log(`  ✅ ${desc} — ${count} 处已修补`); patched += count; }
-    else if (alreadyCount > 0) { console.log(`  ⏭️  ${desc} — 已修补`); skipped += alreadyCount; }
-    else { console.log(`  ⚠️  ${desc} — 未找到`); }
+    for (const [original, replacement] of variants) {
+      const origBuf = Buffer.from(original);
+      const patchBuf = Buffer.from(replacement);
+
+      let pos = 0, count = 0;
+      while (true) { const idx = buf.indexOf(origBuf, pos); if (idx === -1) break; patchBuf.copy(buf, idx); count++; pos = idx + 1; }
+
+      if (count > 0) {
+        console.log(`  ✅ ${desc} — ${count} 处已修补`);
+        patched += count;
+        groupPatched = true;
+        break;
+      }
+
+      let alreadyCount = 0; pos = 0;
+      while (true) { const idx = buf.indexOf(patchBuf, pos); if (idx === -1) break; alreadyCount++; pos = idx + 1; }
+      if (alreadyCount > 0) { groupSkipped = true; break; }
+    }
+
+    if (!groupPatched && groupSkipped) { console.log(`  ⏭️  ${desc} — 已修补`); skipped++; }
+    else if (!groupPatched && !groupSkipped) { console.log(`  ⚠️  ${desc} — 未找到`); }
   }
 
   if (patched === 0 && skipped > 0) { console.log('\n  所有补丁已生效。\n'); return; }
