@@ -3,6 +3,9 @@
  * cc-wechat CLI 入口 — install/login/status/help 命令
  */
 
+// 代理支持（必须最先导入）
+import './proxy.js';
+
 import { execSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';

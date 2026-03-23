@@ -4,6 +4,9 @@
  * Claude Code Channel 插件 — 微信消息桥接
  */
 
+// 代理支持（必须最先导入）
+import './proxy.js';
+
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { ListToolsRequestSchema, CallToolRequestSchema } from '@modelcontextprotocol/sdk/types.js';
