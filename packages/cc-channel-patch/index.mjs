@@ -405,10 +405,18 @@ function writeResult(exePath, buf) {
 
   try {
     fs.writeFileSync(exePath, buf);
+    // 保留执行权限（Linux/macOS）
+    if (process.platform !== 'win32') {
+      try { fs.chmodSync(exePath, 0o755); } catch { /* ignore */ }
+    }
     console.log('\n  ✅ 补丁已直接写入，立即生效！\n');
   } catch {
     const tmpPath = exePath + '.patched';
     fs.writeFileSync(tmpPath, buf);
+    // 保留执行权限（Linux/macOS）
+    if (process.platform !== 'win32') {
+      try { fs.chmodSync(tmpPath, 0o755); } catch { /* ignore */ }
+    }
     console.log(`\n  ⚠️  Claude Code 正在运行，无法直接写入。`);
     console.log(`  补丁已保存到: ${tmpPath}\n`);
     console.log('  请退出所有 Claude Code 后执行:\n');
