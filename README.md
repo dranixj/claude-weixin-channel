@@ -106,6 +106,11 @@ CC 更新后可能需要重新 patch。
 - Session 会过期，需重新扫码
 - 需要用户先发消息（context_token 按消息发放）
 
+##友链
+
+-npm包的patch由linuxdo哈雷佬@Haleclipse率先发布的方式修改而来 
+-学AI上Linux.do 
+
 ## License
 
 MIT
