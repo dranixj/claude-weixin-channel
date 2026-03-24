@@ -413,13 +413,31 @@ function writeResult(exePath, buf) {
     if (process.platform !== 'win32') {
       try { fs.chmodSync(exePath, 0o755); } catch { /* ignore */ }
     }
-    console.log('\n  ✅ 补丁已直接写入，立即生效！\n');
+    // macOS 需要重新签名（ad-hoc），否则 Gatekeeper 阻止运行
+    if (process.platform === 'darwin') {
+      try {
+        execSync(`codesign --force --sign - "${exePath}"`, { stdio: 'pipe' });
+        console.log('\n  ✅ 补丁已直接写入 + codesign 重签名，立即生效！\n');
+      } catch {
+        console.log('\n  ✅ 补丁已直接写入！');
+        console.log('  ⚠️  codesign 重签名失败，请手动执行:');
+        console.log(`      codesign --force --sign - "${exePath}"\n`);
+      }
+    } else {
+      console.log('\n  ✅ 补丁已直接写入，立即生效！\n');
+    }
   } catch {
     const tmpPath = exePath + '.patched';
     fs.writeFileSync(tmpPath, buf);
     // 保留执行权限（Linux/macOS）
     if (process.platform !== 'win32') {
       try { fs.chmodSync(tmpPath, 0o755); } catch { /* ignore */ }
+    }
+    // macOS 需要重新签名
+    if (process.platform === 'darwin') {
+      try {
+        execSync(`codesign --force --sign - "${tmpPath}"`, { stdio: 'pipe' });
+      } catch { /* ignore, user will need to codesign manually */ }
     }
     console.log(`\n  ⚠️  Claude Code 正在运行，无法直接写入。`);
     console.log(`  补丁已保存到: ${tmpPath}\n`);
@@ -433,6 +451,9 @@ function writeResult(exePath, buf) {
     } else {
       console.log(`    mv "${exePath}" "${exePath}.old"`);
       console.log(`    mv "${tmpPath}" "${exePath}"`);
+      if (process.platform === 'darwin') {
+        console.log(`    codesign --force --sign - "${exePath}"`);
+      }
     }
     console.log();
   }
