@@ -12,13 +12,15 @@ import { execSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 
 // ─── 二进制模式补丁定义 ──────────────────────────────────
-// 每组多个变体，适配不同平台的 minify 结果（Windows/Linux/macOS 函数名不同）
+// 每组多个变体，适配不同平台的 minify 结果
+// Windows: PaH/lA/yf  Linux: waH/l$/SL  macOS: Po_/lT/S8
 const BINARY_PATCH_GROUPS: Array<{ desc: string; variants: Array<[string, string]> }> = [
   {
     desc: 'Channels feature flag (tengu_harbor)',
     variants: [
       ['function PaH(){return lA("tengu_harbor",!1)}', 'function PaH(){return                   !0 }'],
       ['function waH(){return l$("tengu_harbor",!1)}', 'function waH(){return                   !0 }'],
+      ['function Po_(){return lT("tengu_harbor",!1)}', 'function Po_(){return                   !0 }'],
     ],
   },
   {
@@ -26,6 +28,7 @@ const BINARY_PATCH_GROUPS: Array<{ desc: string; variants: Array<[string, string
     variants: [
       ['if(!yf()?.accessToken)', 'if(        false     )'],
       ['if(!SL()?.accessToken)', 'if(        false     )'],
+      ['if(!S8()?.accessToken)', 'if(        false     )'],
     ],
   },
   {
@@ -33,6 +36,7 @@ const BINARY_PATCH_GROUPS: Array<{ desc: string; variants: Array<[string, string
     variants: [
       ['noAuth:!yf()?.accessToken', 'noAuth:         false    '],
       ['noAuth:!SL()?.accessToken', 'noAuth:         false    '],
+      ['noAuth:!S8()?.accessToken', 'noAuth:         false    '],
     ],
   },
 ];

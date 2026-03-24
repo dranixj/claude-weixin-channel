@@ -17,12 +17,14 @@ import { execSync } from 'node:child_process';
 
 // ─── 二进制模式补丁定义 ────────────────────────────────────
 // 每组：多个 [原始, 替换] 变体，匹配到任一即生效（适配不同平台 minify 结果）
+// Windows: PaH/lA/yf  Linux: waH/l$/SL  macOS: Po_/lT/S8
 const BINARY_PATCH_GROUPS = [
   {
     desc: 'Channels feature flag (tengu_harbor)',
     variants: [
       ['function PaH(){return lA("tengu_harbor",!1)}', 'function PaH(){return                   !0 }'],
       ['function waH(){return l$("tengu_harbor",!1)}', 'function waH(){return                   !0 }'],
+      ['function Po_(){return lT("tengu_harbor",!1)}', 'function Po_(){return                   !0 }'],
     ],
   },
   {
@@ -30,6 +32,7 @@ const BINARY_PATCH_GROUPS = [
     variants: [
       ['if(!yf()?.accessToken)', 'if(        false     )'],
       ['if(!SL()?.accessToken)', 'if(        false     )'],
+      ['if(!S8()?.accessToken)', 'if(        false     )'],
     ],
   },
   {
@@ -37,6 +40,7 @@ const BINARY_PATCH_GROUPS = [
     variants: [
       ['noAuth:!yf()?.accessToken', 'noAuth:         false    '],
       ['noAuth:!SL()?.accessToken', 'noAuth:         false    '],
+      ['noAuth:!S8()?.accessToken', 'noAuth:         false    '],
     ],
   },
 ];
