@@ -106,10 +106,39 @@ function resolvePatchTarget(claudePath) {
 
   if (ext === '.exe') return claudePath;
   const stat = fs.statSync(claudePath);
-  if (stat.size > 1_000_000) return claudePath;
 
+  // 大文件（>1MB）且文件头是二进制 → 直接作为目标
+  if (stat.size > 1_000_000) {
+    if (isBinaryFile(claudePath)) return claudePath;
+  }
+
+  // 尝试从同级 node_modules 找 cli.js
   const cliJs = path.join(dir, 'node_modules', '@anthropic-ai', 'claude-code', 'cli.js');
   if (fs.existsSync(cliJs)) return cliJs;
+
+  // 读取文件内容，尝试解析 shim/wrapper 中的真实路径
+  try {
+    const content = fs.readFileSync(claudePath, 'utf-8');
+
+    // .cmd shim 或 shell wrapper 中可能包含 cli.js 路径
+    const cliJsMatch = content.match(/["']?([^\s"']*node_modules[\\/]@anthropic-ai[\\/]claude-code[\\/]cli\.js)["']?/);
+    if (cliJsMatch) {
+      // 尝试绝对路径
+      if (fs.existsSync(cliJsMatch[1])) return cliJsMatch[1];
+      // 尝试相对于 dir 解析
+      const resolved = path.resolve(dir, cliJsMatch[1]);
+      if (fs.existsSync(resolved)) return resolved;
+    }
+
+    // npm shim 通常引用 npm prefix 下的 node_modules
+    try {
+      const prefix = execSync('npm config get prefix', { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
+      if (prefix) {
+        const prefixCliJs = path.join(prefix, 'node_modules', '@anthropic-ai', 'claude-code', 'cli.js');
+        if (fs.existsSync(prefixCliJs)) return prefixCliJs;
+      }
+    } catch { /* ignore */ }
+  } catch { /* 非文本文件，忽略 */ }
 
   if (ext === '.cmd') {
     try {
