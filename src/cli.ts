@@ -9,6 +9,7 @@ import './proxy.js';
 import { execSync } from 'node:child_process';
 import { loginTerminal } from './auth.js';
 import { saveAccount, getActiveAccount } from './store.js';
+import { installHooks, uninstallHooks } from './hooks.js';
 
 // ─── help ────────────────────────────────────────────
 
@@ -20,12 +21,14 @@ function help(): void {
   用法: npx claude-weixin-channel <命令>
 
   命令:
-    install   注册 MCP server + 扫码登录
-    patch     修补 Claude Code 以启用 Channels 功能
-    unpatch   恢复原始 Claude Code
-    login     重新扫码登录
-    status    查看连接状态
-    help      显示帮助
+    install           注册 MCP server + 扫码登录
+    patch             修补 Claude Code 以启用 Channels 功能
+    unpatch           恢复原始 Claude Code
+    login             重新扫码登录
+    status            查看连接状态
+    install-hooks     安装微信体验增强 hooks 到 ~/.claude/settings.json
+    uninstall-hooks   从 ~/.claude/settings.json 移除 hooks
+    help              显示帮助
 `);
 }
 
@@ -116,6 +119,8 @@ if (!command && !process.stdin.isTTY) {
       break;
     }
     case 'status': status(); break;
+    case 'install-hooks': case 'hooks-install': installHooks(); break;
+    case 'uninstall-hooks': case 'hooks-uninstall': uninstallHooks(); break;
     case 'help': case '--help': case '-h': case undefined: help(); break;
     default: console.error(`未知命令: ${command}`); help(); process.exit(1);
   }

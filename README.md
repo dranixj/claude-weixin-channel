@@ -124,6 +124,32 @@ Claude Code 的 Channels 功能受服务端灰度控制，部分用户需要 pat
     ├── account.json     # 登录凭证
     └── sync-buf.txt     # 消息同步游标
 
+## Hooks 体验增强
+
+在安装步骤之后再跑一次：
+
+    npx claude-weixin-channel install-hooks
+
+即可把三个生命周期 hook 合并进 `~/.claude/settings.json`（原文件自动备份为 `.bak`）：
+
+| 脚本 | 事件 | 作用 |
+|------|------|------|
+| `wechat-ack.sh` | `UserPromptSubmit` | 即时回复 "收到，处理中..."；支持 `/new` `/help` `/status` |
+| `wechat-reply-sent.sh` | `PostToolUse`（matcher: `mcp__wechat-channel__reply`） | 成功回复后写入 `.replied` 标记，防止 Stop hook 误报 |
+| `wechat-stop-notify.sh` | `Stop` | 未命中 `.replied` 时向微信推送"处理中断"通知（用量耗尽等异常） |
+
+> 原文里第四个脚本 `wechat-reply-fix.sh`（`PreToolUse` 清洗 XML 污染）已内置到 MCP server 的
+> `sanitizeReplyArgs()`，无需外部 hook。
+
+卸载：`npx claude-weixin-channel uninstall-hooks`
+
+更多设计说明与环境变量见 [hooks/README.md](./hooks/README.md)。
+
+## 路线图
+
+- [ ] 与上游 `cc-wechat` 的 upstream 跟踪合并策略
+- [ ] Hook 的 Windows 原生（非 WSL）支持
+
 ## 限制
 
 - 权限审批仍需在终端（Claude Code 的固有限制）
@@ -135,6 +161,7 @@ Claude Code 的 Channels 功能受服务端灰度控制，部分用户需要 pat
 ## 鸣谢
 
 - 上游项目：[paceaitian/cc-wechat](https://github.com/paceaitian/cc-wechat)
+- Hook 增强思路来源：[dranixj 的文章](https://dranixj.com/articles/cc-wechat-hooks-enhance-claude-code-wechat-experience)
 - npm 包的 patch 由 linuxdo 哈雷佬 @Haleclipse 率先发布的方式修改而来
 - 学 AI 上 [Linux.do](https://linux.do)
 
