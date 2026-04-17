@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * cc-wechat MCP Server 主入口
- * Claude Code Channel 插件 — 微信消息桥接
+ * claude-weixin-channel MCP Server 主入口
+ * Claude Code Channel 插件 — 微信消息桥接（fork of paceaitian/cc-wechat）
  */
 
 // 代理支持（必须最先导入）
@@ -19,6 +19,8 @@ import { uploadMedia, downloadMedia } from './cdn.js';
 import { stripMarkdown, chunkText } from './text-utils.js';
 import type { WeixinMessage, AccountData } from './types.js';
 import { MessageItemType } from './types.js';
+
+import { sanitizeReplyArgs } from './sanitize.js';
 
 // ─── 状态变量 ─────────────────────────────────────────
 
@@ -178,11 +180,15 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
   // ── reply tool ──
   if (name === 'reply') {
-    const userId = args?.user_id as string | undefined;
-    const contextToken = args?.context_token as string | undefined;
-    const content = args?.content as string | undefined;
-    const media = args?.media as string | undefined;
-    const replyToMessageId = args?.reply_to_message_id as string | undefined;
+    const { args: safeArgs, fixed } = sanitizeReplyArgs(args as Record<string, unknown> | undefined);
+    if (fixed.length > 0) {
+      process.stderr.write(`[wechat-channel] reply args sanitized: ${fixed.join(', ')}\n`);
+    }
+    const userId = safeArgs.user_id as string | undefined;
+    const contextToken = safeArgs.context_token as string | undefined;
+    const content = safeArgs.content as string | undefined;
+    const media = safeArgs.media as string | undefined;
+    const replyToMessageId = safeArgs.reply_to_message_id as string | undefined;
 
     // 验证必填参数
     if (!userId || !contextToken || !content) {
