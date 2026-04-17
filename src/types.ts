@@ -1,5 +1,5 @@
 /**
- * cc-wechat 类型定义 — iLink Bot API 请求/响应/消息结构
+ * claude-weixin-channel 类型定义 — iLink Bot API 请求/响应/消息结构
  */
 
 // 消息内容类型枚举

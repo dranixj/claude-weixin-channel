@@ -1,5 +1,5 @@
 /**
- * cc-wechat CDN 媒体操作 — AES-128-ECB 加解密 + 上传/下载
+ * claude-weixin-channel CDN 媒体操作 — AES-128-ECB 加解密 + 上传/下载
  */
 import * as crypto from 'node:crypto';
 import * as fs from 'node:fs';
@@ -94,7 +94,7 @@ export async function uploadMedia(params: {
   // 4. 构造 filekey
   const extname = path.extname(filePath);
   const rand = crypto.randomBytes(3).toString('hex');
-  const filekey = `cc-wechat-${Date.now()}-${rand}${extname}`;
+  const filekey = `claude-weixin-channel-${Date.now()}-${rand}${extname}`;
 
   // 5. 获取上传地址
   const uploadResp = await getUploadUrl(token, {
@@ -172,7 +172,7 @@ export async function uploadMedia(params: {
   }
 
   // 9. 发送消息
-  const clientId = `cc-wechat-${crypto.randomBytes(4).toString('hex')}`;
+  const clientId = `claude-weixin-channel-${crypto.randomBytes(4).toString('hex')}`;
   const body = JSON.stringify({
     msg: {
       from_user_id: '',
@@ -246,7 +246,7 @@ export async function downloadMedia(params: {
 
   // 5. 通过文件头检测类型并加后缀
   const ext = detectExtByMagic(plaintext);
-  const targetDir = outDir ?? path.join(os.tmpdir(), 'cc-wechat', 'media');
+  const targetDir = outDir ?? path.join(os.tmpdir(), 'claude-weixin-channel', 'media');
   fs.mkdirSync(targetDir, { recursive: true });
 
   let targetName = fileName ?? `media-${Date.now()}`;

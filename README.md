@@ -1,6 +1,9 @@
-# cc-wechat
+# claude-weixin-channel
 
 用微信控制 Claude Code。扫码即用，不需要 OpenClaw。
+
+> Fork of [paceaitian/cc-wechat](https://github.com/paceaitian/cc-wechat)（MIT）。
+> 本分支计划叠加一组 Hook 脚本，解决"消息无反馈 / reply 参数被污染 / 用量耗尽时无应答"三个体验痛点，详见 [dranixj 的文章](https://dranixj.com/articles/cc-wechat-hooks-enhance-claude-code-wechat-experience)。Hook 能力会在后续版本落地，当前版本与上游 `cc-wechat` 功能等价。
 
 ```
 微信 → 腾讯 iLink API → MCP Server (long-poll) → Claude Code
@@ -19,7 +22,7 @@
 
 ### 1. 安装微信插件
 
-    npx cc-wechat@latest install
+    npx claude-weixin-channel@latest install
 
 这会：
 1. 注册 MCP server 到 Claude Code（user 级别）
@@ -30,13 +33,15 @@
 
 Claude Code 的 Channels 功能受服务端灰度控制，部分用户需要 patch 才能使用：
 
-    npx cc-channel-patch@latest
+    npx claude-weixin-channel@latest patch
 
 - 全平台支持：Windows / macOS / Linux / WSL
 - 全安装方式：native 安装版、npm 安装版（自动检测）
 - 正则匹配，适配所有 CC 版本，无需手动更新
 - 如果 CC 正在运行会生成 `.patched` 文件，按提示手动替换即可
-- 恢复原版：`npx cc-channel-patch unpatch`
+- 恢复原版：`npx claude-weixin-channel unpatch`
+
+> 也可用独立的零依赖补丁包 [`claude-weixin-channel-patch`](./packages/claude-weixin-channel-patch)（fork 自上游 `cc-channel-patch`），效果等价。
 
 ### 3. 启动
 
@@ -44,9 +49,9 @@ Claude Code 的 Channels 功能受服务端灰度控制，部分用户需要 pat
 
 ### 手动安装（替代方式）
 
-    npm i -g cc-wechat
-    claude mcp add -s user wechat-channel -- npx -y cc-wechat@latest
-    npx cc-wechat login
+    npm i -g claude-weixin-channel
+    claude mcp add -s user wechat-channel -- npx -y claude-weixin-channel@latest
+    npx claude-weixin-channel login
     claude --dangerously-load-development-channels server:wechat-channel
 
 ## 使用
@@ -57,27 +62,11 @@ Claude Code 的 Channels 功能受服务端灰度控制，部分用户需要 pat
 
 ### 重新登录
 
-    npx cc-wechat login
+    npx claude-weixin-channel login
 
 ### 在 Claude Code 中登录
 
 如果已经在 Claude Code 中，直接用 login 工具扫码。
-
-## cc-channel-patch（独立补丁包）
-
-不需要微信 Channel，只想启用 Channels 功能（用于 Telegram/Discord 等其他 Channel 插件）：
-
-    npx cc-channel-patch@latest
-
-这是一个独立的 npm 包，零依赖，一行命令。补丁内容：
-
-| 补丁点 | 说明 |
-|--------|------|
-| tengu_harbor feature flag | 绕过 Anthropic 的灰度开关 |
-| Channel gate auth | 跳过 accessToken 认证检查（代理用户需要）|
-| UI notice | 消除 "Channels are not currently available" 提示 |
-
-CC 更新后可能需要重新 patch。
 
 ## 工作原理
 
@@ -103,7 +92,7 @@ CC 更新后可能需要重新 patch。
   "mcpServers": {
     "wechat-channel": {
       "command": "npx",
-      "args": ["-y", "cc-wechat@latest"],
+      "args": ["-y", "claude-weixin-channel@latest"],
       "env": { "WECHAT_PROFILE": "work" }
     }
   }
@@ -127,7 +116,7 @@ CC 更新后可能需要重新 patch。
 
 - 全局 `claude.json` 的配置作为默认账号，不需要设 `WECHAT_PROFILE`
 - 项目 `.mcp.json` 中声明同名 `wechat-channel` 会覆盖全局配置
-- 新 profile 首次使用需扫码登录（在 CC 中调用 login 工具，或命令行 `WECHAT_PROFILE=work npx cc-wechat login`）
+- 新 profile 首次使用需扫码登录（在 CC 中调用 login 工具，或命令行 `WECHAT_PROFILE=work npx claude-weixin-channel login`）
 
 ## 状态文件
 
@@ -145,9 +134,10 @@ CC 更新后可能需要重新 patch。
 
 ## 鸣谢
 
-- npm包的patch由linuxdo哈雷佬@Haleclipse率先发布的方式修改而来
-- 学AI上[Linux.do](https://linux.do)
+- 上游项目：[paceaitian/cc-wechat](https://github.com/paceaitian/cc-wechat)
+- npm 包的 patch 由 linuxdo 哈雷佬 @Haleclipse 率先发布的方式修改而来
+- 学 AI 上 [Linux.do](https://linux.do)
 
 ## License
 
-MIT
+MIT — 见 [LICENSE](./LICENSE) 与 [NOTICE](./NOTICE)。保留了上游 cc-wechat 的版权声明。

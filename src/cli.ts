@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * cc-wechat CLI 入口 — install/login/status/help 命令
+ * claude-weixin-channel CLI 入口 — install/login/status/help 命令
  */
 
 // 代理支持（必须最先导入）
@@ -15,9 +15,9 @@ import { saveAccount, getActiveAccount } from './store.js';
 /** 打印帮助信息 */
 function help(): void {
   console.log(`
-  cc-wechat — 微信 Claude Code Channel 插件
+  claude-weixin-channel — 微信 Claude Code Channel 插件
 
-  用法: npx cc-wechat <命令>
+  用法: npx claude-weixin-channel <命令>
 
   命令:
     install   注册 MCP server + 扫码登录
@@ -33,7 +33,7 @@ function help(): void {
 
 /** 注册 MCP server + 扫码登录 */
 async function install(): Promise<void> {
-  console.log('\n🔧 cc-wechat 安装向导\n');
+  console.log('\n🔧 claude-weixin-channel 安装向导\n');
 
   // [1/3] 注册 MCP server（先删后加，确保旧格式也被纠正）
   console.log('[1/3] 注册 MCP server...');
@@ -41,7 +41,7 @@ async function install(): Promise<void> {
     execSync('claude mcp remove -s user wechat-channel', { stdio: 'pipe' });
   } catch { /* 不存在则忽略 */ }
   try {
-    execSync('claude mcp add -s user wechat-channel -- npx -y cc-wechat@latest', { stdio: 'pipe' });
+    execSync('claude mcp add -s user wechat-channel -- npx -y claude-weixin-channel@latest', { stdio: 'pipe' });
     console.log('  ✅ MCP server 已注册');
   } catch (e) {
     console.error('  ❌ MCP server 注册失败:', (e as Error).message);
@@ -51,7 +51,7 @@ async function install(): Promise<void> {
   console.log('\n[2/3] 微信扫码登录...');
   const existing = getActiveAccount();
   if (existing) {
-    console.log('  ⏭️  已有登录账号，跳过扫码。如需重新登录请运行: npx cc-wechat login');
+    console.log('  ⏭️  已有登录账号，跳过扫码。如需重新登录请运行: npx claude-weixin-channel login');
   } else {
     const { token, accountId, baseUrl } = await loginTerminal();
     saveAccount({
@@ -95,7 +95,7 @@ function status(): void {
     console.log(`  baseUrl: ${account.baseUrl}`);
     console.log(`  savedAt: ${account.savedAt}\n`);
   } else {
-    console.log('\n❌ 尚未登录。请运行: npx cc-wechat install\n');
+    console.log('\n❌ 尚未登录。请运行: npx claude-weixin-channel install\n');
   }
 }
 

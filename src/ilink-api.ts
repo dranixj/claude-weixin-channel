@@ -1,5 +1,5 @@
 /**
- * cc-wechat iLink Bot API 封装 — 7 个 HTTP API
+ * claude-weixin-channel iLink Bot API 封装 — 7 个 HTTP API
  */
 import { randomBytes } from 'node:crypto';
 import type {
@@ -187,7 +187,7 @@ export async function sendMessage(
   baseUrl?: string,
   refMsgId?: string,
 ): Promise<string> {
-  const clientId = `cc-wechat-${randomBytes(4).toString('hex')}`;
+  const clientId = `claude-weixin-channel-${randomBytes(4).toString('hex')}`;
   // 构造消息内容项，支持引用回复
   const textItem: Record<string, unknown> = { type: 1, text_item: { text } };
   if (refMsgId) {

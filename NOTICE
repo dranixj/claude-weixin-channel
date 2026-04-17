@@ -1,0 +1,13 @@
+claude-weixin-channel
+=====================
+
+This project is a fork of cc-wechat (https://github.com/paceaitian/cc-wechat),
+originally created by paceaitian and contributors. It is distributed under
+the MIT License — see LICENSE.
+
+Upstream source:   https://github.com/paceaitian/cc-wechat
+Upstream npm:      https://www.npmjs.com/package/cc-wechat
+
+Planned enhancements in this fork are inspired by:
+  "用三个 Hook 脚本让 cc-wechat 真正可用" by dranixj
+  https://dranixj.com/articles/cc-wechat-hooks-enhance-claude-code-wechat-experience

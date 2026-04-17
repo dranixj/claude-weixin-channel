@@ -1,20 +1,48 @@
 {
-  "name": "cc-wechat",
-  "version": "0.6.8",
-  "description": "WeChat channel for Claude Code via iLink Bot API",
+  "name": "claude-weixin-channel",
+  "version": "0.2.0",
+  "description": "WeChat channel for Claude Code via iLink Bot API — fork of cc-wechat with planned hook-based UX enhancements",
   "type": "module",
   "bin": {
-    "cc-wechat": "dist/cli.js",
-    "cc-wechat-server": "dist/server.js"
+    "claude-weixin-channel": "dist/cli.js",
+    "claude-weixin-channel-server": "dist/server.js"
   },
   "scripts": {
     "build": "tsc",
-    "dev": "tsc --watch"
+    "dev": "tsc --watch",
+    "prepublishOnly": "npm run build"
+  },
+  "files": [
+    "dist",
+    "hooks",
+    "README.md",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "keywords": [
+    "claude-code",
+    "mcp",
+    "wechat",
+    "weixin",
+    "channel",
+    "ilink"
+  ],
+  "author": "dranixj <npm@dranixj.com>",
+  "license": "MIT",
+  "homepage": "https://github.com/dranixj/claude-weixin-channel#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dranixj/claude-weixin-channel.git"
+  },
+  "bugs": {
+    "url": "https://github.com/dranixj/claude-weixin-channel/issues"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "engines": {
     "node": ">=22"
   },
-  "license": "MIT",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.1",
     "qrcode-terminal": "^0.12.0"

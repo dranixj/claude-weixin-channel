@@ -1,5 +1,5 @@
 /**
- * cc-wechat 凭证持久化 — account.json 原子写入 + sync buf
+ * claude-weixin-channel 凭证持久化 — account.json 原子写入 + sync buf
  */
 
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';

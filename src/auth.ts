@@ -342,7 +342,7 @@ function buildLoginPage(qrUrl: string): string {
   </div>
   <div class="status" id="status">等待扫码...</div>
   <div class="cmd-hint" id="cmd-hint" onclick="copyCmd()">
-    npx cc-wechat
+    npx claude-weixin-channel
     <span class="copied" id="copied">已复制</span>
   </div>
 </div>
@@ -393,7 +393,7 @@ function buildLoginPage(qrUrl: string): string {
   }
 
   function copyCmd() {
-    navigator.clipboard.writeText('npx cc-wechat').then(() => {
+    navigator.clipboard.writeText('npx claude-weixin-channel').then(() => {
       const copied = document.getElementById('copied');
       copied.classList.add('show');
       setTimeout(() => copied.classList.remove('show'), 1500);
