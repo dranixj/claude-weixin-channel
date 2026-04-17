@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 /**
- * cc-channel-patch — 一键启用 Claude Code Channels
+ * claude-weixin-channel-patch — 一键启用 Claude Code Channels
  *
  * 双模式补丁：
  * - 二进制模式（exe）：按固定字符串搜索替换
  * - AST 模式（cli.js / npm 安装）：用 acorn 解析 JS AST，按语义特征定位替换
  *
- * 用法：npx cc-channel-patch          # 修补
- *       npx cc-channel-patch unpatch   # 恢复
+ * 用法：npx claude-weixin-channel-patch          # 修补
+ *       npx claude-weixin-channel-patch unpatch   # 恢复
  */
 
 import fs from 'node:fs';
@@ -233,7 +233,7 @@ async function patchAst(exePath) {
   console.log('  模式: AST 语义分析\n');
 
   // 动态下载 acorn（不加依赖）
-  const acornPath = path.join(homedir(), '.cache', 'cc-channel-patch', 'acorn.js');
+  const acornPath = path.join(homedir(), '.cache', 'claude-weixin-channel-patch', 'acorn.js');
   if (!fs.existsSync(acornPath)) {
     console.log('  下载 acorn 解析器...');
     fs.mkdirSync(path.dirname(acornPath), { recursive: true });
@@ -476,13 +476,13 @@ function writeResult(exePath, buf) {
     }
     console.log();
   }
-  console.log('  恢复方法: npx cc-channel-patch unpatch\n');
+  console.log('  恢复方法: npx claude-weixin-channel-patch unpatch\n');
 }
 
 // ─── patch 入口 ────────────────────────────────────────────
 
 async function patch() {
-  console.log('\n  cc-channel-patch — 启用 Claude Code Channels\n');
+  console.log('\n  claude-weixin-channel-patch — 启用 Claude Code Channels\n');
 
   const claudePath = findClaude();
   if (!claudePath) {
@@ -505,7 +505,7 @@ async function patch() {
 // ─── unpatch ────────────────────────────────────────────────
 
 function unpatch() {
-  console.log('\n  cc-channel-patch unpatch — 恢复原始 Claude Code\n');
+  console.log('\n  claude-weixin-channel-patch unpatch — 恢复原始 Claude Code\n');
 
   const claudePath = findClaude();
   if (!claudePath) { console.error('  找不到 Claude Code。\n'); process.exit(1); }
@@ -547,14 +547,14 @@ if (cmd === 'unpatch' || cmd === 'restore') {
   unpatch();
 } else if (cmd === '--help' || cmd === '-h') {
   console.log(`
-  cc-channel-patch — 启用 Claude Code Channels 功能
+  claude-weixin-channel-patch — 启用 Claude Code Channels 功能
 
   支持 exe 安装版（二进制模式）和 npm 安装版（AST 模式），自动检测。
 
   用法:
-    npx cc-channel-patch           修补 Claude Code
-    npx cc-channel-patch unpatch   恢复原始版本
-    npx cc-channel-patch --help    显示帮助
+    npx claude-weixin-channel-patch           修补 Claude Code
+    npx claude-weixin-channel-patch unpatch   恢复原始版本
+    npx claude-weixin-channel-patch --help    显示帮助
   `);
 } else {
   patch().catch(e => { console.error(`  错误: ${e.message}\n`); process.exit(1); });

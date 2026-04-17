@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * cc-wechat 补丁工具（双模式）
+ * claude-weixin-channel 补丁工具（双模式）
  * - 二进制模式（exe）：按固定字符串搜索替换
  * - AST 模式（cli.js / npm 安装）：acorn 解析 JS AST，按语义特征定位
  */
@@ -174,7 +174,7 @@ function writeResult(exePath: string, buf: Buffer): void {
     }
     console.log();
   }
-  console.log('  恢复方法: npx cc-wechat unpatch\n');
+  console.log('  恢复方法: npx claude-weixin-channel unpatch\n');
 }
 
 // ─── 二进制模式 patch ──────────────────────────────────────
@@ -223,7 +223,7 @@ async function patchAst(exePath: string): Promise<void> {
   console.log('  模式: AST 语义分析\n');
 
   // 动态下载 acorn
-  const acornPath = path.join(homedir(), '.cache', 'cc-channel-patch', 'acorn.js');
+  const acornPath = path.join(homedir(), '.cache', 'claude-weixin-channel-patch', 'acorn.js');
   if (!fs.existsSync(acornPath)) {
     console.log('  下载 acorn 解析器...');
     fs.mkdirSync(path.dirname(acornPath), { recursive: true });
@@ -369,7 +369,7 @@ interface ASTNode {
 
 // ─── patch 入口 ────────────────────────────────────────────
 async function patch(): Promise<void> {
-  console.log('\n  cc-wechat patch — Claude Code Channels 补丁\n');
+  console.log('\n  claude-weixin-channel patch — Claude Code Channels 补丁\n');
 
   const claudePath = findClaudeExe();
   if (!claudePath) { console.error('  找不到 Claude Code。\n'); process.exit(1); }
@@ -384,7 +384,7 @@ async function patch(): Promise<void> {
 }
 
 function unpatch(): void {
-  console.log('\n  cc-wechat unpatch — 恢复原始 Claude Code\n');
+  console.log('\n  claude-weixin-channel unpatch — 恢复原始 Claude Code\n');
   const claudePath = findClaudeExe();
   if (!claudePath) { console.error('  找不到 Claude Code。\n'); process.exit(1); }
   const exePath = resolvePatchTarget(claudePath);

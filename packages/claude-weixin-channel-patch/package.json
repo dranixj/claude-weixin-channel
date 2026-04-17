@@ -1,0 +1,34 @@
+{
+  "name": "claude-weixin-channel-patch",
+  "version": "0.1.0",
+  "description": "One-command patch to enable Claude Code Channels (bypasses tengu_harbor feature flag) — fork of cc-channel-patch",
+  "type": "module",
+  "bin": {
+    "claude-weixin-channel-patch": "index.mjs"
+  },
+  "files": [
+    "index.mjs",
+    "README.md"
+  ],
+  "keywords": [
+    "claude-code",
+    "channels",
+    "patch",
+    "tengu_harbor"
+  ],
+  "author": "dranixj <npm@dranixj.com>",
+  "license": "MIT",
+  "homepage": "https://github.com/dranixj/claude-weixin-channel/tree/main/packages/claude-weixin-channel-patch#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dranixj/claude-weixin-channel.git",
+    "directory": "packages/claude-weixin-channel-patch"
+  },
+  "bugs": {
+    "url": "https://github.com/dranixj/claude-weixin-channel/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": { "node": ">=18" }
+}
