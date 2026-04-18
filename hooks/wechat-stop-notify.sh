@@ -22,6 +22,9 @@ stop_reason=$(jq -r '.stop_reason // .reason // ""' <<<"$payload" 2>/dev/null ||
 session_file="$HOOKS_DIR/${session_id}.session.json"
 replied_marker="$HOOKS_DIR/${session_id}.replied"
 
+# 通知后台 stream 进程优雅退出（无论是否已 replied）
+touch "$HOOKS_DIR/${session_id}.stream.stop" 2>/dev/null || true
+
 # 已成功回复过 → 清理，不通知
 if [[ -f "$replied_marker" ]]; then
   rm -f "$session_file" "$replied_marker"
@@ -39,8 +42,15 @@ case "$stop_reason" in
   max_tokens)
     msg="⚠️ 回复因长度限制被截断，请稍后重试或缩小问题范围。"
     ;;
+  ""|unknown|end_turn|stop_sequence|tool_use)
+    # 正常结束：Claude 用纯文本回复（由 stream 转发）而非 reply 工具，
+    # 没有 .replied 标记不代表异常。静默清理，不打扰用户。
+    log "normal stop session=$session_id reason=${stop_reason:-empty}; no notify"
+    rm -f "$session_file"
+    exit 0
+    ;;
   *)
-    msg="⚠️ 处理中断（原因：${stop_reason:-未知}），可能是用量已达上限。请稍后再试。"
+    msg="⚠️ 处理中断（原因：${stop_reason}）。"
     ;;
 esac
 
@@ -53,17 +63,23 @@ fi
 token=$(jq -r '.token // ""' "$account_file")
 base_url=$(jq -r '.baseUrl // "https://ilinkai.weixin.qq.com"' "$account_file")
 
+cid="cc-stop-$(openssl rand -hex 4 2>/dev/null || echo $$)"
+uin=$(echo -n "$(od -An -tu4 -N4 /dev/urandom | tr -d ' ')" | base64)
 req=$(jq -n \
-  --arg to "$user_id" --arg ctx "$context_token" --arg txt "$msg" \
-  '{msg: {to_user_id: $to, message_type: 2, message_state: 2,
+  --arg to "$user_id" --arg ctx "$context_token" --arg txt "$msg" --arg cid "$cid" \
+  '{msg: {from_user_id: "", to_user_id: $to, client_id: $cid,
+          message_type: 2, message_state: 2,
           item_list: [{type: 1, text_item: {text: $txt}}],
           context_token: $ctx},
     base_info: {channel_version: "0.1.0"}}')
-curl -s --max-time 5 -X POST "${base_url%/}/ilink/bot/sendmessage" \
+resp=$(curl -s --max-time 5 -w "\n%{http_code}" -X POST "${base_url%/}/ilink/bot/sendmessage" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer ${token}" \
   -H "AuthorizationType: ilink_bot_token" \
-  -d "$req" >/dev/null 2>&1 || true
+  -H "X-WECHAT-UIN: ${uin}" \
+  -d "$req" 2>&1) || true
+http_code="${resp##*$'\n'}"
+[[ "$http_code" != "200" ]] && log "send non-200 http=$http_code body=${resp%$'\n'*}"
 
 log "notify sent session=$session_id reason=${stop_reason:-unknown}"
 rm -f "$session_file"
