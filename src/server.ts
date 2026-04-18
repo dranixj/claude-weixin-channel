@@ -16,7 +16,7 @@ import { getActiveAccount, saveAccount, loadSyncBuf, saveSyncBuf } from './store
 import { getUpdates, sendMessage, sendTyping, getConfig } from './ilink-api.js';
 import { loginBrowser } from './auth.js';
 import { uploadMedia, downloadMedia } from './cdn.js';
-import { stripMarkdown, chunkText } from './text-utils.js';
+import { chunkText } from './text-utils.js';
 import type { WeixinMessage, AccountData } from './types.js';
 import { MessageItemType } from './types.js';
 
@@ -231,9 +231,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         // typing 失败不阻塞
       }
 
-      // 清理 Markdown 并分段发送（第一段带引用回复）
-      const plainText = stripMarkdown(content);
-      const chunks = chunkText(plainText, 3900);
+      // 保留 Markdown 并分段发送（第一段带引用回复）
+      const chunks = chunkText(content, 3900);
       for (let i = 0; i < chunks.length; i++) {
         const refId = i === 0 ? replyToMessageId : undefined;
         await sendMessage(account.token, userId, chunks[i], contextToken, account.baseUrl, refId);
