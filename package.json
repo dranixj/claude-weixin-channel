@@ -1,6 +1,6 @@
 {
   "name": "claude-weixin-channel",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "WeChat channel for Claude Code via iLink Bot API — fork of cc-wechat with planned hook-based UX enhancements",
   "type": "module",
   "bin": {
