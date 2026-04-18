@@ -45,14 +45,23 @@ Claude Code 的 Channels 功能受服务端灰度控制，部分用户需要 pat
 
 ### 3. 启动
 
-    claude --dangerously-load-development-channels server:wechat-channel
+    claude --dangerously-skip-permissions --dangerously-load-development-channels server:wechat-channel
+
+> ⚠️ **必须开启 yolo 模式（`--dangerously-skip-permissions`）**
+>
+> 微信侧不存在"允许/拒绝"的交互界面，若 Claude Code 在工具调用前弹出权限审批，对话就会卡死。
+> 因此远程 IM 场景下必须用 yolo 模式让 Claude 直接执行工具。这也意味着：**当前版本对模型生成的
+> 命令没有二次校验，请在可控/非敏感的项目中使用**。
+>
+> 后续计划在 hook 层加入安全校验（`PreToolUse` 拦截 `rm -rf` / `curl | sh` /
+> 写入敏感路径等危险模式），在保留 yolo 便利性的同时恢复一道兜底。见 [路线图](#路线图)。
 
 ### 手动安装（替代方式）
 
     npm i -g claude-weixin-channel
     claude mcp add -s user wechat-channel -- npx -y claude-weixin-channel@latest
     npx claude-weixin-channel login
-    claude --dangerously-load-development-channels server:wechat-channel
+    claude --dangerously-skip-permissions --dangerously-load-development-channels server:wechat-channel
 
 ## 使用
 
@@ -153,6 +162,13 @@ Claude Code 的 Channels 功能受服务端灰度控制，部分用户需要 pat
 - `/session-status` — 查看当前会话状态
 - `/help` — 显示帮助信息
 
+> 🛈 **关于斜杠命令的控制台告警**
+>
+> 斜杠命令由 `wechat-ack.sh` 在 `UserPromptSubmit` hook 里拦截并处理（改写 transcript、切换 mode 等），
+> 并不是 Claude Code 原生的 slash command。当你在微信发 `/mode code`、`/clear` 等命令时，Claude Code
+> 控制台可能会打印 `Unknown command` 或类似提示 —— 这是预期行为，因为 Claude Code 本身并不认识这些
+> 命令，实际动作由 hook 完成，可以忽略。
+
 > 原文里第四个脚本 `wechat-reply-fix.sh`（`PreToolUse` 清洗 XML 污染）已内置到 MCP server 的
 > `sanitizeReplyArgs()`，无需外部 hook。
 
@@ -160,9 +176,22 @@ Claude Code 的 Channels 功能受服务端灰度控制，部分用户需要 pat
 
 更多设计说明与环境变量见 [hooks/README.md](./hooks/README.md)。
 
+## 开发
+
+    npm run build        # 编译 → dist/
+    npm run dev          # 监听模式
+    npm run typecheck    # 仅类型检查
+    npm run lint         # ESLint
+    npm test             # node --test 跑 test/*.test.ts
+
+单元测试当前覆盖 `sanitize.ts` 和 `text-utils.ts` 等纯函数模块，使用 Node 自带的 `node:test`，
+无额外运行时依赖。
+
 ## 路线图
 
-- [ ] 与上游 `cc-wechat` 的 upstream 跟踪合并策略
+- [ ] **Hook 层安全校验（PreToolUse）**：在 yolo 模式下加一道拦截，阻止
+  `rm -rf /`、`curl … | sh`、写入 `~/.ssh` 等高风险操作直接执行；命中规则时向微信推送告警，
+  由用户显式放行后再继续
 - [ ] Hook 的 Windows 原生（非 WSL）支持
 
 ## 限制
@@ -177,8 +206,17 @@ Claude Code 的 Channels 功能受服务端灰度控制，部分用户需要 pat
 
 - 上游项目：[paceaitian/cc-wechat](https://github.com/paceaitian/cc-wechat)
 - Hook 增强思路来源：[dranixj 的文章](https://dranixj.com/articles/cc-wechat-hooks-enhance-claude-code-wechat-experience)
-- npm 包的 patch 由 linuxdo 哈雷佬 @Haleclipse 率先发布的方式修改而来
-- 学 AI 上 [Linux.do](https://linux.do)
+
+## 关于作者
+
+本 fork 由 **dranixj** 维护。更多关于 Claude Code、AI 工程化与开发者工具的深度文章，欢迎关注：
+
+- 📝 博客：[dranixj.com](https://dranixj.com) — 持续更新 Claude Code 实战、Hook 设计、MCP 生态等内容
+- 📖 本项目的设计思路详见：[《用三个 Hook 脚本让 cc-wechat 真正可用——Claude Code 微信交互体验增强实录》](https://dranixj.com/articles/cc-wechat-hooks-enhance-claude-code-wechat-experience)
+- 💌 联系：`admin@dranixj.com`
+
+如果这个工具帮到了你，欢迎在 GitHub 点个 Star，或把 [dranixj.com](https://dranixj.com) 分享给同样
+折腾 Claude Code 的朋友 —— 这是对作者最直接的支持。
 
 ## License
 

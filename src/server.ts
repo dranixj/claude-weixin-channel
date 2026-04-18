@@ -7,9 +7,9 @@
 // 代理支持（必须最先导入）
 import './proxy.js';
 
-import { Server } from '@modelcontextprotocol/sdk/server/index.js';
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { ListToolsRequestSchema, CallToolRequestSchema } from '@modelcontextprotocol/sdk/types.js';
+import { z } from 'zod';
 import fs from 'node:fs';
 
 import { getActiveAccount, saveAccount, loadSyncBuf, saveSyncBuf } from './store.js';
@@ -106,7 +106,7 @@ async function extractText(msg: WeixinMessage): Promise<string> {
 
 // ─── MCP Server 创建 ─────────────────────────────────
 
-const server = new Server(
+const server = new McpServer(
   { name: 'wechat-channel', version: '0.1.0' },
   {
     capabilities: {
@@ -121,43 +121,14 @@ IMPORTANT: Always use the reply tool to respond to WeChat messages. Do not just 
   },
 );
 
-// ─── Tools — ListToolsRequestSchema ──────────────────
+// ─── Tools — login ───────────────────────────────────
 
-server.setRequestHandler(ListToolsRequestSchema, async () => ({
-  tools: [
-    {
-      name: 'login',
-      description: '扫码登录微信。首次使用或 session 过期后运行。',
-      inputSchema: {
-        type: 'object' as const,
-        properties: {},
-      },
-    },
-    {
-      name: 'reply',
-      description: '回复微信消息',
-      inputSchema: {
-        type: 'object' as const,
-        properties: {
-          user_id: { type: 'string', description: '微信用户 ID（来自消息 meta 的 user_id）' },
-          context_token: { type: 'string', description: '会话上下文令牌（来自消息 meta 的 context_token）' },
-          content: { type: 'string', description: '回复文本内容' },
-          media: { type: 'string', description: '可选：本地文件绝对路径，发送图片/视频/文件' },
-          reply_to_message_id: { type: 'string', description: '可选：引用回复的原消息 ID（来自 meta 的 message_id）' },
-        },
-        required: ['user_id', 'context_token', 'content'],
-      },
-    },
-  ],
-}));
-
-// ─── Tools — CallToolRequestSchema ───────────────────
-
-server.setRequestHandler(CallToolRequestSchema, async (request) => {
-  const { name, arguments: args } = request.params;
-
-  // ── login tool ──
-  if (name === 'login') {
+server.registerTool(
+  'login',
+  {
+    description: '扫码登录微信。首次使用或 session 过期后运行。',
+  },
+  async () => {
     try {
       const result = await loginBrowser();
       saveAccount({
@@ -176,11 +147,25 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         isError: true,
       };
     }
-  }
+  },
+);
 
-  // ── reply tool ──
-  if (name === 'reply') {
-    const { args: safeArgs, fixed } = sanitizeReplyArgs(args as Record<string, unknown> | undefined);
+// ─── Tools — reply ───────────────────────────────────
+
+server.registerTool(
+  'reply',
+  {
+    description: '回复微信消息',
+    inputSchema: {
+      user_id: z.string().describe('微信用户 ID（来自消息 meta 的 user_id）'),
+      context_token: z.string().describe('会话上下文令牌（来自消息 meta 的 context_token）'),
+      content: z.string().describe('回复文本内容'),
+      media: z.string().optional().describe('可选：本地文件绝对路径，发送图片/视频/文件'),
+      reply_to_message_id: z.string().optional().describe('可选：引用回复的原消息 ID（来自 meta 的 message_id）'),
+    },
+  },
+  async (args) => {
+    const { args: safeArgs, fixed } = sanitizeReplyArgs(args as Record<string, unknown>);
     if (fixed.length > 0) {
       process.stderr.write(`[wechat-channel] reply args sanitized: ${fixed.join(', ')}\n`);
     }
@@ -190,7 +175,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const media = safeArgs.media as string | undefined;
     const replyToMessageId = safeArgs.reply_to_message_id as string | undefined;
 
-    // 验证必填参数
     if (!userId || !contextToken || !content) {
       return {
         content: [{ type: 'text' as const, text: '缺少必填参数: user_id, context_token, content' }],
@@ -198,7 +182,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       };
     }
 
-    // 验证账号存在
     const account = getActiveAccount();
     if (!account) {
       return {
@@ -207,7 +190,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       };
     }
 
-    // 检查媒体文件是否存在
     if (media && !fs.existsSync(media)) {
       return {
         content: [{ type: 'text' as const, text: `媒体文件不存在: ${media}` }],
@@ -216,7 +198,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     }
 
     try {
-      // 发送 typing 状态（best-effort）
       try {
         let ticket = typingTicketCache.get(userId);
         if (!ticket) {
@@ -231,14 +212,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         // typing 失败不阻塞
       }
 
-      // 保留 Markdown 并分段发送（第一段带引用回复）
       const chunks = chunkText(content, 3900);
       for (let i = 0; i < chunks.length; i++) {
         const refId = i === 0 ? replyToMessageId : undefined;
         await sendMessage(account.token, userId, chunks[i], contextToken, account.baseUrl, refId);
       }
 
-      // 发送媒体文件（如有）
       let mediaError = '';
       if (media) {
         try {
@@ -254,7 +233,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }
       }
 
-      // 停止 typing 状态（best-effort）
       try {
         const ticket = typingTicketCache.get(userId);
         if (ticket) {
@@ -276,13 +254,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         isError: true,
       };
     }
-  }
-
-  return {
-    content: [{ type: 'text' as const, text: `未知工具: ${name}` }],
-    isError: true,
-  };
-});
+  },
+);
 
 // ─── 轮询循环 ─────────────────────────────────────────
 
@@ -314,7 +287,7 @@ async function pollLoop(account: AccountData): Promise<void> {
           if (sessionRetries >= MAX_SESSION_RETRIES) {
             pollingActive = false;
             // 通知 Claude session 过期
-            server.notification({
+            server.server.notification({
               method: 'notifications/message',
               params: {
                 level: 'error',
@@ -387,7 +360,7 @@ async function pollLoop(account: AccountData): Promise<void> {
         }
 
         // 通知 Claude 有新消息
-        server.notification({
+        server.server.notification({
           method: 'notifications/claude/channel',
           params: {
             content: text,

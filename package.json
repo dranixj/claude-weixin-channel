@@ -1,6 +1,6 @@
 {
   "name": "claude-weixin-channel",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "WeChat channel for Claude Code via iLink Bot API — fork of cc-wechat with planned hook-based UX enhancements",
   "type": "module",
   "bin": {
@@ -10,6 +10,9 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
+    "lint": "eslint \"src/**/*.ts\" \"test/**/*.ts\"",
+    "typecheck": "tsc --noEmit",
+    "test": "tsc -p tsconfig.test.json && node --test dist-test/test/*.test.js",
     "prepublishOnly": "npm run build"
   },
   "files": [
@@ -45,10 +48,14 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.1",
-    "qrcode-terminal": "^0.12.0"
+    "qrcode-terminal": "^0.12.0",
+    "zod": "^4.0.0"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
+    "@typescript-eslint/eslint-plugin": "^8.58.2",
+    "@typescript-eslint/parser": "^8.58.2",
+    "eslint": "^9.39.4",
     "typescript": "^5.7.0"
   }
 }
