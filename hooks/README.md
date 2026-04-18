@@ -1,16 +1,50 @@
 # Hooks — WeChat × Claude Code 体验增强
 
-三个 bash 脚本，解决 cc-wechat 家族在实际使用中的体验痛点。详细设计见
+四个 bash 脚本，解决 cc-wechat 家族在实际使用中的体验痛点。详细设计见
 [dranixj 的文章](https://dranixj.com/articles/cc-wechat-hooks-enhance-claude-code-wechat-experience)。
 
 | Hook | Claude Code 事件 | 作用 |
 |------|-----------------|------|
-| `wechat-ack.sh` | `UserPromptSubmit` | 即时发送"收到，处理中..."；持久化会话状态；支持 `/new` `/help` `/status` |
-| `wechat-reply-sent.sh` | `PostToolUse` | `mcp__wechat-channel__reply` 成功后写入 `.replied` 标记 |
-| `wechat-stop-notify.sh` | `Stop` | 若未命中 `.replied`，推送"处理中断"通知，覆盖用量耗尽等异常 |
+| `wechat-ack.sh` | `UserPromptSubmit` | 即时发送"收到，处理中..."；持久化会话状态；支持斜杠命令和模式切换 |
+| `wechat-progress.sh` | `PostToolUse` | 工具执行进度实时推送（需 `/progress on`） |
+| `wechat-stream.sh` | `PostChunk` | Claude 流式输出实时转发到微信（默认开启）|
+| `wechat-stop-notify.sh` | `Stop` | 若处理中断（无完整 reply），推送异常通知 |
 
 > 原文里的第四个脚本 `wechat-reply-fix.sh`（`PreToolUse` 清洗 XML 污染）已经内置到
 > `src/server.ts` 的 `sanitizeReplyArgs()`，无需再以 hook 形式部署。
+
+## 斜杠命令
+
+`wechat-ack.sh` 支持以下命令，在微信中直接发送即可：
+
+| 命令 | 说明 |
+|------|------|
+| `/new` | 开始新话题（清除 transcript 链接） |
+| `/clear` | 清空编辑器上下文（截断 transcript 文件） |
+| `/mode <name>` | 切换角色模式：`code` (工程师) / `review` (代码审查) / `explain` (教师) / `concise` (简洁) / `off` (默认) |
+| `/compact` | 精简响应模式（等同 `/mode compact`） |
+| `/think` | 开启深度思考模式 |
+| `/stream on\|off` | 切换流式转发（默认 on） |
+| `/progress on\|off` | 切换工具进度通知（默认 off） |
+| `/session-status` | 查看当前会话状态：session ID、profile、当前 mode、stream/progress 设置 |
+| `/help` | 显示可用命令列表 |
+
+### 会话状态持久化
+
+所有会话状态保存在 `~/.cache/claude-weixin-channel/hooks/${session_id}.session.json`：
+
+```json
+{
+  "user_id": "...",
+  "context_token": "...",
+  "mode": "code",
+  "mode_ctx": "# System\nAct as a senior software engineer...",
+  "stream_notify": true,
+  "progress_notify": false
+}
+```
+
+状态在 `UserPromptSubmit` 时读取，在处理后自动保存，跨多个请求持久化。
 
 ## 一键安装
 
@@ -50,7 +84,7 @@ npx claude-weixin-channel uninstall-hooks
 
 ## 手动安装（不用 CLI）
 
-把三个 `.sh` 复制到 `~/.claude/hooks/`，`chmod +x`，然后把下方 hooks 片段合并到 `~/.claude/settings.json`：
+把四个 `.sh` 复制到 `~/.claude/hooks/`，`chmod +x`，然后把下方 hooks 片段合并到 `~/.claude/settings.json`：
 
 ```json
 {
@@ -61,8 +95,16 @@ npx claude-weixin-channel uninstall-hooks
       ]}
     ],
     "PostToolUse": [
+      { "matcher": "*", "hooks": [
+        { "type": "command", "command": "$HOME/.claude/hooks/wechat-progress.sh", "timeout": 5 }
+      ]},
       { "matcher": "mcp__wechat-channel__reply", "hooks": [
         { "type": "command", "command": "$HOME/.claude/hooks/wechat-reply-sent.sh", "timeout": 5 }
+      ]}
+    ],
+    "PostChunk": [
+      { "matcher": "*", "hooks": [
+        { "type": "command", "command": "$HOME/.claude/hooks/wechat-stream.sh", "timeout": 2 }
       ]}
     ],
     "Stop": [

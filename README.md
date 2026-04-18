@@ -130,13 +130,28 @@ Claude Code 的 Channels 功能受服务端灰度控制，部分用户需要 pat
 
     npx claude-weixin-channel install-hooks
 
-即可把三个生命周期 hook 合并进 `~/.claude/settings.json`（原文件自动备份为 `.bak`）：
+即可把四个生命周期 hook 合并进 `~/.claude/settings.json`（原文件自动备份为 `.bak`）：
 
 | 脚本 | 事件 | 作用 |
 |------|------|------|
-| `wechat-ack.sh` | `UserPromptSubmit` | 即时回复 "收到，处理中..."；支持 `/new` `/help` `/status` |
-| `wechat-reply-sent.sh` | `PostToolUse`（matcher: `mcp__wechat-channel__reply`） | 成功回复后写入 `.replied` 标记，防止 Stop hook 误报 |
+| `wechat-ack.sh` | `UserPromptSubmit` | 即时回复 "收到，处理中..."；持久化会话状态；支持斜杠命令 |
+| `wechat-progress.sh` | `PostToolUse` | 工具执行进度实时推送到微信 |
+| `wechat-stream.sh` | `PostChunk` | Claude 流式输出实时转发到微信 |
 | `wechat-stop-notify.sh` | `Stop` | 未命中 `.replied` 时向微信推送"处理中断"通知（用量耗尽等异常） |
+
+### 斜杠命令
+
+在微信对话中发送以下命令控制行为：
+
+- `/new` — 开始新话题（清除上下文链接）
+- `/clear` — 清空编辑器上下文（截断 transcript）
+- `/mode <name>` — 切换角色模式（code/review/explain/concise/off）
+- `/compact` — 精简响应模式
+- `/think` — 开启深度思考模式
+- `/stream on|off` — 切换流式转发（默认开启）
+- `/progress on|off` — 切换工具进度通知（默认关闭）
+- `/session-status` — 查看当前会话状态
+- `/help` — 显示帮助信息
 
 > 原文里第四个脚本 `wechat-reply-fix.sh`（`PreToolUse` 清洗 XML 污染）已内置到 MCP server 的
 > `sanitizeReplyArgs()`，无需外部 hook。
