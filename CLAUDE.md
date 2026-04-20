@@ -84,3 +84,9 @@ Claude sometimes wraps its `reply` arguments in XML-ish tags that would otherwis
 - TypeScript, ESM (`"type": "module"`), Node ≥ 22. All intra-module imports use `.js` extensions even for `.ts` sources — required for ESM resolution post-build.
 - No test framework is wired up; validation is manual against a live WeChat account.
 - Commit style: Conventional Commits (`feat:`, `fix:`, `chore(release):`, `refactor(hooks):`, …). The `chore(release): vX.Y.Z` commit is the cut-point for npm publishes.
+
+## Operational notes
+
+- **GitHub issue 目标仓库**：本仓库是 fork，`origin` = `dranixj/claude-weixin-channel`，`upstream` = `paceaitian/cc-wechat`。`gh issue create` 默认会解析到 upstream 并在那里建 issue，务必显式加 `--repo dranixj/claude-weixin-channel`，或先 `gh repo set-default dranixj/claude-weixin-channel`。否则会污染上游 issue 列表。
+- **Roadmap issue 拆分原则**：当一次讨论涉及多项独立改进时，为每项单独建 issue（一个 issue 一个 PR），不要合并成综合性 roadmap issue——综合 issue 无法对应单独实施分支。草稿放在根目录 `issues/` 文件夹（已被 `.gitignore` 排除），文件名用**实际 GitHub issue 编号** + slug，例如 `issues/2-stream-timeout.md` 对应 #2，正文作为 `--body-file` 提交。先创建 issue 拿到编号再落盘命名，避免后续改名。
+- **Markdown 文档约束**：项目启用了 markdownlint（`MD022` headings 需空行环绕、`MD032` lists 需空行环绕、`MD024` 不允许重复标题）。写入 `.md` 文件时每个 `#`/`##`/`###` 前后都留空行，列表与正文之间留空行；issue 草稿文件同样需要遵守。
