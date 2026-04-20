@@ -26,12 +26,13 @@ STOP_MARKER="$HOOKS_DIR/${SESSION_ID}.stream.stop"
 PID_FILE="$HOOKS_DIR/${SESSION_ID}.stream.pid"
 STATE_FILE="$HOOKS_DIR/${SESSION_ID}.session.json"
 REPLIED_MARKER="$HOOKS_DIR/${SESSION_ID}.replied"
+HEARTBEAT_FILE="$HOOKS_DIR/${SESSION_ID}.stream.heartbeat"
 LOG_FILE="$HOOKS_DIR/stream.log"
 
 log() { printf '[%s] %s\n' "$(date '+%F %T')" "$*" >> "$LOG_FILE" 2>/dev/null || true; }
 
 on_exit() {
-  rm -f "$PID_FILE" "$STOP_MARKER" 2>/dev/null || true
+  rm -f "$PID_FILE" "$STOP_MARKER" "$HEARTBEAT_FILE" 2>/dev/null || true
   log "exit session=$SESSION_ID"
 }
 trap on_exit EXIT TERM INT
@@ -72,7 +73,8 @@ send_text() {
     send_chunk "${text:0:$max}"
     text="${text:$max}"
   done
-  touch "$REPLIED_MARKER" 2>/dev/null || true
+  touch "$REPLIED_MARKER" "$HEARTBEAT_FILE" 2>/dev/null || true
+  log "heartbeat renewed session=$SESSION_ID"
 }
 
 # ─── 从 JSONL 提取 assistant text block（b64 行输出） ───
@@ -119,15 +121,16 @@ if [[ -f "$TRANSCRIPT_PATH" ]]; then
   last_line=$(wc -l < "$TRANSCRIPT_PATH" 2>/dev/null || echo 0)
 fi
 
-MAX_RUNTIME=600
-start_ts=$(date +%s)
+MAX_IDLE=600
+touch "$HEARTBEAT_FILE" 2>/dev/null || true
 log "start session=$SESSION_ID transcript=$TRANSCRIPT_PATH start_line=$last_line"
 
 while true; do
   [[ -f "$STOP_MARKER" ]] && break
   now=$(date +%s)
-  if (( now - start_ts > MAX_RUNTIME )); then
-    log "timeout"; break
+  last_hb=$(stat -c %Y "$HEARTBEAT_FILE" 2>/dev/null || echo "$now")
+  if (( now - last_hb > MAX_IDLE )); then
+    log "idle timeout (${MAX_IDLE}s since last heartbeat)"; break
   fi
 
   # 动态刷新 context_token（若用户发送了新消息，wechat-ack 已更新 session.json）
