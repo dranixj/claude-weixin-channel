@@ -3,6 +3,12 @@
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 与
 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [0.3.1] - 2026-04-20
+
+### 修复
+
+- **wechat-stream.sh**：流超时从「绝对 600s」改为「空闲 600s」——每次成功推送 chunk 后 touch `.stream.heartbeat`，超时检查比较 heartbeat mtime，有内容输出即续约（fix #2）
+
 ## [0.3.0] - 2026-04-18
 
 ### 新增
