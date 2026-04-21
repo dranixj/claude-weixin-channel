@@ -3,6 +3,12 @@
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 与
 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [0.3.2] - 2026-04-21
+
+### 新增
+
+- **wechat-bg-guard.sh** — 新增 `PreToolUse` hook，拦截 `watch`、`tail -f`、`kubectl rollout status`、dev server 等阻塞性长时命令，提示 Claude 改用 `run_in_background=true` + `Monitor` 组合，确保微信消息桥接期间可以响应新消息（fix #6）
+
 ## [0.3.1] - 2026-04-20
 
 ### 修复
@@ -70,6 +76,7 @@
 - **子包**：`packages/claude-weixin-channel-patch`（fork 自上游 `cc-channel-patch`）
 - **引用回复**：`reply` 工具新增 `reply_to_message_id` 参数
 
+[0.3.1]: https://github.com/dranixj/claude-weixin-channel/releases/tag/v0.3.1
 [0.3.0]: https://github.com/dranixj/claude-weixin-channel/releases/tag/v0.3.0
 [0.2.0]: https://github.com/dranixj/claude-weixin-channel/releases/tag/v0.2.0
 [0.1.0]: https://github.com/dranixj/claude-weixin-channel/releases/tag/v0.1.0

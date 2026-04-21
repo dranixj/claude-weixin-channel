@@ -28,9 +28,10 @@ interface HookSpec {
 }
 
 const HOOK_SPECS: HookSpec[] = [
+  { script: 'wechat-bg-guard.sh',     event: 'PreToolUse',       matcher: 'Bash',                         timeout: 5  },
   { script: 'wechat-ack.sh',          event: 'UserPromptSubmit', matcher: '*',                            timeout: 10 },
-  { script: 'wechat-reply-sent.sh',   event: 'PostToolUse',      matcher: 'mcp__wechat-channel__reply',   timeout: 5 },
-  { script: 'wechat-progress.sh',     event: 'PostToolUse',      matcher: '*',                            timeout: 5 },
+  { script: 'wechat-reply-sent.sh',   event: 'PostToolUse',      matcher: 'mcp__wechat-channel__reply',   timeout: 5  },
+  { script: 'wechat-progress.sh',     event: 'PostToolUse',      matcher: '*',                            timeout: 5  },
   { script: 'wechat-stop-notify.sh',  event: 'Stop',             matcher: '*',                            timeout: 10 },
 ];
 

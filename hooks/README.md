@@ -1,10 +1,11 @@
 # Hooks — WeChat × Claude Code 体验增强
 
-四个 bash 脚本，解决 cc-wechat 家族在实际使用中的体验痛点。详细设计见
+五个 bash 脚本，解决 cc-wechat 家族在实际使用中的体验痛点。详细设计见
 [dranixj 的文章](https://dranixj.com/articles/cc-wechat-hooks-enhance-claude-code-wechat-experience)。
 
 | Hook | Claude Code 事件 | 作用 |
 |------|-----------------|------|
+| `wechat-bg-guard.sh` | `PreToolUse` (Bash) | 拦截阻塞性长时运行命令（watch、tail -f、dev server 等），提示改用后台模式 |
 | `wechat-ack.sh` | `UserPromptSubmit` | 即时发送"收到，处理中..."；持久化会话状态；支持斜杠命令和模式切换 |
 | `wechat-progress.sh` | `PostToolUse` | 工具执行进度实时推送（需 `/progress on`） |
 | `wechat-stream.sh` | `PostChunk` | Claude 流式输出实时转发到微信（默认开启）|
@@ -12,6 +13,34 @@
 
 > 原文里的第四个脚本 `wechat-reply-fix.sh`（`PreToolUse` 清洗 XML 污染）已经内置到
 > `src/server.ts` 的 `sanitizeReplyArgs()`，无需再以 hook 形式部署。
+
+## 后台命令守卫（bg-guard）
+
+`wechat-bg-guard.sh` 在 Claude 调用 Bash 工具之前运行。若命令是长时阻塞型，且 `run_in_background` 未设为 `true`，hook 会阻止执行并提示 Claude 改用后台模式。
+
+**拦截的命令模式：**
+
+| 模式 | 示例 |
+|------|------|
+| `watch` 命令 | `watch kubectl get pods` |
+| `tail -f` / `tail --follow` | `tail -f /var/log/app.log` |
+| `journalctl -f` / `--follow` | `journalctl -f -u nginx` |
+| `kubectl rollout status` / `kubectl wait` | `kubectl rollout status deploy/app` |
+| `npm/yarn/pnpm/bun dev` | `npm run dev`、`bun dev` |
+| Python HTTP 服务器 | `python3 -m http.server 8080` |
+| ASGI/WSGI 服务器 | `uvicorn app:main`、`gunicorn -w 4 app:app` |
+| Flask dev server | `flask run` |
+
+**不拦截（单次执行命令）：**
+
+`npm run build`、`npm test`、`pytest`、`make`、`docker build`、`tail -n 50 file.log`
+
+**自动放行条件：**
+
+- `run_in_background: true` 已设置
+- 工具名不是 `Bash`（matcher 为 `Bash`）
+
+**日志：** `~/.cache/claude-weixin-channel/hooks/bg-guard.log`（仅在拦截时写入）
 
 ## 斜杠命令
 
@@ -84,11 +113,16 @@ npx claude-weixin-channel uninstall-hooks
 
 ## 手动安装（不用 CLI）
 
-把四个 `.sh` 复制到 `~/.claude/hooks/`，`chmod +x`，然后把下方 hooks 片段合并到 `~/.claude/settings.json`：
+把五个 `.sh` 复制到 `~/.claude/hooks/`，`chmod +x`，然后把下方 hooks 片段合并到 `~/.claude/settings.json`：
 
 ```json
 {
   "hooks": {
+    "PreToolUse": [
+      { "matcher": "Bash", "hooks": [
+        { "type": "command", "command": "$HOME/.claude/hooks/wechat-bg-guard.sh", "timeout": 5 }
+      ]}
+    ],
     "UserPromptSubmit": [
       { "matcher": "*", "hooks": [
         { "type": "command", "command": "$HOME/.claude/hooks/wechat-ack.sh", "timeout": 10 }
